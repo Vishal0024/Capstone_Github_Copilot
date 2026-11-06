@@ -11,9 +11,9 @@ app.use(express.static('public'));
 app.use(express.json());
 app.use(cors());
 
-const TODOS_FILE = path.join(__dirname, 'todos.json');
-const USERS_FILE = path.join(__dirname, 'users.json');
-const SESSIONS_FILE = path.join(__dirname, 'sessions.json');
+const TODOS_FILE = process.env.TODOS_FILE || path.join(__dirname, 'todos.json');
+const USERS_FILE = process.env.USERS_FILE || path.join(__dirname, 'users.json');
+const SESSIONS_FILE = process.env.SESSIONS_FILE || path.join(__dirname, 'sessions.json');
 
 function readTodos() {
   try {
@@ -248,7 +248,11 @@ app.get("/", (req, res) => {
   res.sendFile(path.join(__dirname, "index.html"));
 });
 
-app.listen(PORT, () => {
-  console.log(`App is listening on http://localhost:${PORT}`);
-});
+if (require.main === module) {
+  app.listen(PORT, () => {
+    console.log(`App is listening on http://localhost:${PORT}`);
+  });
+}
+
+module.exports = app;
 
