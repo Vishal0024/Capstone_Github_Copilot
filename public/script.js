@@ -43,6 +43,20 @@ function fetchAndRenderTodos() {
     .catch(err => alert(err.message));
 }
 
+function parseTodoTimestamp(value) {
+  if (typeof value !== 'string' || value.trim() === '') return null;
+  const date = new Date(value.trim());
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function formatTodoTimestamp(date) {
+  return new Intl.DateTimeFormat('en-GB', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric'
+  }).format(date);
+}
+
 function renderTodos(data) {
   setLoading(false);
   currentTodos = data;
@@ -70,7 +84,20 @@ function renderTodos(data) {
     // Timestamps
     const timestamps = document.createElement('div');
     timestamps.className = 'todo-timestamp';
-    timestamps.textContent = `Created: ${new Date(element.createdAt).toLocaleString()} | Updated: ${new Date(element.updatedAt).toLocaleString()}`;
+    const createdDate = parseTodoTimestamp(element.createdAt);
+    const updatedDate = parseTodoTimestamp(element.updatedAt);
+    const createdAt = document.createElement('div');
+    createdAt.setAttribute('data-testid', 'todo-created-at');
+    createdAt.textContent = createdDate
+      ? `Created ${formatTodoTimestamp(createdDate)}`
+      : 'Created: Not available';
+    timestamps.appendChild(createdAt);
+    if (createdDate && updatedDate && updatedDate.getTime() > createdDate.getTime()) {
+      const editedAt = document.createElement('div');
+      editedAt.setAttribute('data-testid', 'todo-edited-at');
+      editedAt.textContent = `Edited ${formatTodoTimestamp(updatedDate)}`;
+      timestamps.appendChild(editedAt);
+    }
     // Actions
     const actions = document.createElement('div');
     actions.className = 'todo-actions';

@@ -43,7 +43,7 @@ There is no React or Spring Boot application in this checkout; this is a vanilla
 | `index.html` | No structural change is expected: the card list remains mounted under `.outputData`; existing stylesheet and script links remain. Additions are not required to the static page markup. |
 | `public/styles.css` | Reuse `.output .todo-timestamp` metadata typography. If needed, allow it to wrap (for example `overflow-wrap: anywhere` or a flex/grid wrapping layout) and verify at viewport widths <= 480px; avoid fixed-width metadata or horizontal overflow. No new stylesheet or dependency. |
 | Existing todo API in `todoServer.js` | No story implementation change. It remains source of timestamp values and owns timestamp creation/update. Existing `/todos` response already includes both fields. |
-| Automated tests | Extend the repository's existing test setup if available, or use its established browser/client test approach. Cover normal formatting, Edited eligibility, invalid/missing values, and safe text rendering. Do not introduce a framework/dependency solely for this feature without approval. |
+| Automated tests | Use Node's built-in `node:test` runner and `node:assert` with a minimal test DOM to exercise the production `renderTodos` path. Run with `npm test`; cover formatting, Edited eligibility, invalid/missing values, and safe text rendering. No framework or dependency is added. |
 
 ### Rendering rules
 
@@ -86,6 +86,8 @@ No backend implementation is proposed. There are no Spring layers in this reposi
 - **State:** Keep `currentTodos` and the existing search/filter/sort state unchanged. Do not create a second timestamp cache or client-owned timestamp state.
 - **API module:** There is no separate API module in the current client. Keep use of `fetchWithAuth()`/`fetchAndRenderTodos()`; do not add one for this display-only story.
 - **Rendering:** Add a pure formatter/validation helper in `public/script.js` near the existing rendering utilities. It should reject absent/invalid dates (e.g. check `Number.isNaN(date.getTime())`) and return a date string or a null/invalid result. Compare milliseconds before formatting for Edited eligibility. Create `.todo-timestamp` children and set `textContent`.
+- **Timestamp input guard (D-2 / F-02):** Before constructing or parsing a `Date`, accept only string inputs whose trimmed value is non-empty. Reject missing/absent, `null`, empty, whitespace-only, and all non-string values; then reject any parsed invalid date. An invalid creation value uses the fallback and prevents Edited from rendering.
+- **Test strategy (D-1 / F-01):** Add focused tests in `tests/` using only Node's built-in `node:test` and `node:assert`, plus a minimal DOM harness that runs the actual `renderTodos` implementation and inspects rendered nodes/text. Expose the tests through `npm test` (`node --test`); do not add dependencies.
 - **Testing hooks:** Add stable attributes to date labels for automated selection, e.g. `data-testid="todo-created-at"` to the Created element and `data-testid="todo-edited-at"` only when Edited is rendered. If a card-level hook is needed, use `data-testid="todo-card"`; repeated values are appropriate for repeated cards. Tests should assert rendered text and node absence/presence, not implementation-specific helper names.
 - **CSS:** Reuse `.todo-timestamp`; allow labels to wrap and maintain metadata contrast/readability on widths <= 480px. Preserve card action layout and avoid horizontal scrolling.
 - **No new dependencies/frameworks:** Use only browser-native APIs and current app assets.
@@ -170,6 +172,8 @@ Mobile (width <= 480px; metadata wraps, no horizontal scroll):
 3. **DEC-67543-03 - Robust conditional metadata:** Always represent creation with a fallback; render Edited only for valid strictly later updates.
 4. **DEC-67543-04 - Safe and testable DOM:** Render text through `textContent` and expose stable `data-testid` hooks.
 5. **DEC-67543-05 - Responsive minimal change:** Reuse existing metadata styles, allow wrapping at mobile widths, and avoid unrelated behavior changes.
+6. **D-1 / F-01 - Built-in test runner:** Use dependency-free Node `node:test` and `node:assert` tests of the production rendering path, invoked by `npm test`.
+7. **D-2 / F-02 - Strict timestamp input validation:** Reject missing, null, empty, whitespace-only, and non-string timestamp values before parsing; reject invalid parsed dates as well.
 
 ## Input limitations
 
