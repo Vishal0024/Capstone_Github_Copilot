@@ -1,0 +1,29 @@
+{
+  "mcpServers": {
+    "github-mcp": {
+      "type": "stdio",
+      "command": "cmd",
+      "args": [
+        "/c",
+        "npx",
+        "-y",
+        "@modelcontextprotocol/server-github"
+      ],
+      "env": {
+        "GITHUB_PERSONAL_ACCESS_TOKEN": "${env:GITHUB_PERSONAL_ACCESS_TOKEN}"
+      }
+    },
+    "jira-mcp": {
+      "type": "stdio",
+      "command": "uvx",
+      "args": [
+        "mcp-atlassian",
+        "--env-file",
+        ".env"
+      ],
+      "env": {
+        "JIRA_URL": "https://jiraeu.epam.com/"
+      }
+    }
+  }
+}

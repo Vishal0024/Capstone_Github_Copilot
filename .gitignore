@@ -6,3 +6,7 @@ temp_interactive_push.bat
 .gitignore
 .idea/
 server.log
+.env
+.env.*
+!.env.example
+coverage/

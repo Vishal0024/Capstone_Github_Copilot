@@ -1,0 +1,19 @@
+{
+  "storyId": "",
+  "repository": "Vishal0024/Capstone_Github_Copilot",
+  "baseBranch": "main",
+  "featureBranch": "",
+  "currentStage": 1,
+  "stages": [
+    {
+      "stage": 1,
+      "name": "Requirements",
+      "status": "pending",
+      "artifact": "docs/sdlc/<STORY-ID>/requirements.md",
+      "commitSha": null,
+      "approval": "pending",
+      "externalActions": [],
+      "updatedAt": null
+    }
+  ]
+}

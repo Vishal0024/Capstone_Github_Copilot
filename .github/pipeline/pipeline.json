@@ -1,0 +1,34 @@
+{
+  "repository": "Vishal0024/Capstone_Github_Copilot",
+  "baseBranch": "main",
+  "featureBranchPattern": "feature/<STORY-ID>",
+  "storyIdPattern": "^[A-Z][A-Z0-9]+-[0-9]+$",
+  "coverageThreshold": 85,
+  "coverageMetric": "lines",
+  "severity": ["BLOCKER", "MAJOR", "MINOR"],
+  "approvalResponses": ["approve", "approved", "yes", "y"],
+  "protectedPaths": [
+    ".env",
+    ".env.*",
+    "node_modules/",
+    "todos.json",
+    "users.json",
+    "sessions.json"
+  ],
+  "requiredArtifacts": [
+    "requirements.md",
+    "architecture.md",
+    "design-review.md",
+    "impl-plan.md",
+    "implementation-notes.md",
+    "code-review.md",
+    "verification.md"
+  ],
+  "requiredPrSections": [
+    "Summary",
+    "Changes Made",
+    "Test Evidence",
+    "Known Limitations",
+    "Reviewer Checklist"
+  ]
+}
