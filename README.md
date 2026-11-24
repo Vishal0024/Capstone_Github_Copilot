@@ -85,6 +85,33 @@ This project is licensed under the ISC License. See the [LICENSE](LICENSE) file 
 - Add unit and integration tests
 - Add deployment scripts for cloud platforms
 
+## Agentic SDLC Pipeline
+
+This repository includes a governed eight-stage GitHub Copilot workflow:
+requirements, architecture, design review, implementation planning,
+implementation, code review, verification, and Pull Request creation.
+
+Configuration and definitions live under `.github/agents/`, `.github/skills/`,
+`.github/templates/`, `.github/hooks/`, and `.github/pipeline/`.
+
+Invoke the orchestrator with a Jira Story key:
+
+```text
+@orchestrator-agent EPMCDMETST-11111
+```
+
+The pipeline uses `feature/<STORY-ID>` branches and writes artifacts to
+`docs/sdlc/<STORY-ID>/`. It stops after every stage for Human-in-the-Loop
+approval and does not merge or approve Pull Requests.
+
+### MCP setup
+
+- Configure GitHub MCP in `.vscode/mcp.json` or `.mcp.json`.
+- Configure Jira MCP and credentials in `.env`; never commit credentials.
+- The supported commands are `npm test`, `npm run lint`,
+  `npm run coverage`, `npm run docs:check -- <STORY-ID>`, and
+  `npm run sdlc:verify` (lint, tests, and coverage).
+
 ## ⭐️ Star this repo if you found it helpful!
 
 Happy coding! 🌟

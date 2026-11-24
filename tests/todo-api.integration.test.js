@@ -1,0 +1,113 @@
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
+const test = require('node:test');
+const request = require('supertest');
+
+const app = require('../todoServer');
+const usersFile = path.join(__dirname, '..', 'users.json');
+const todosFile = path.join(__dirname, '..', 'todos.json');
+const sessionsFile = path.join(__dirname, '..', 'sessions.json');
+
+function snapshot(file) {
+  return fs.existsSync(file) ? fs.readFileSync(file, 'utf8') : null;
+}
+
+function restore(file, content) {
+  if (content === null) {
+    if (fs.existsSync(file)) fs.unlinkSync(file);
+  } else {
+    fs.writeFileSync(file, content);
+  }
+}
+
+test('API auth and Not Found behavior', async t => {
+  const before = [usersFile, todosFile, sessionsFile].map(snapshot);
+  t.after(() => {
+    [usersFile, todosFile, sessionsFile].forEach((file, index) => restore(file, before[index]));
+  });
+
+  fs.writeFileSync(usersFile, '[]');
+  fs.writeFileSync(todosFile, '[]');
+  fs.writeFileSync(sessionsFile, '{}');
+
+  const email = `api-${Date.now()}@example.test`;
+  await request(app).post('/signup').send({
+    name: 'API Test',
+    email,
+    password: 'test-password'
+  }).expect(201);
+
+  const login = await request(app).post('/login').send({
+    email,
+    password: 'test-password'
+  }).expect(200);
+
+  await request(app).get('/todos')
+    .set('Authorization', login.body.token)
+    .expect(200);
+
+  await request(app).get('/todos/999999')
+    .set('Authorization', login.body.token)
+    .expect(404);
+
+  await request(app).post('/todos')
+    .set('Authorization', login.body.token)
+    .send({ title: '   ', description: 'Invalid', completed: false })
+    .expect(400);
+
+  await request(app).get('/todos')
+    .expect(401);
+
+  assert.equal(login.body.token.length > 0, true);
+});
+
+test('todo CRUD and filter endpoints cover success and missing cases', async t => {
+  const before = [usersFile, todosFile, sessionsFile].map(snapshot);
+  t.after(() => {
+    [usersFile, todosFile, sessionsFile].forEach((file, index) => restore(file, before[index]));
+  });
+
+  fs.writeFileSync(usersFile, '[]');
+  fs.writeFileSync(todosFile, '[]');
+  fs.writeFileSync(sessionsFile, '{}');
+
+  await request(app).post('/signup').send({
+    name: 'CRUD Test',
+    email: 'crud@example.test',
+    password: 'password'
+  }).expect(201);
+  const login = await request(app).post('/login').send({
+    email: 'crud@example.test',
+    password: 'password'
+  }).expect(200);
+  const auth = login.body.token;
+  const headers = { Authorization: auth };
+
+  const created = await request(app).post('/todos')
+    .set(headers)
+    .send({ title: 'Test todo', description: 'Details', completed: false })
+    .expect(201);
+
+  await request(app).get(`/todos/${created.body.id}`).set(headers).expect(200);
+  await request(app).get('/todos').query({ search: 'test' }).set(headers).expect(200);
+  await request(app).get('/todos').query({ filter: 'active' }).set(headers).expect(200);
+  await request(app).get('/todos').query({ filter: 'completed' }).set(headers).expect(200);
+  await request(app).get('/todos').query({ sort: 'title' }).set(headers).expect(200);
+  await request(app).get('/todos').query({ sort: 'createdAt' }).set(headers).expect(200);
+  await request(app).get('/todos').query({ sort: 'updatedAt' }).set(headers).expect(200);
+
+  await request(app).put(`/todos/${created.body.id}`)
+    .set(headers)
+    .send({ title: 'Updated todo', description: 'Updated details', completed: true })
+    .expect(200);
+  await request(app).patch(`/todos/${created.body.id}/toggle`).set(headers).expect(200);
+  await request(app).delete(`/todos/${created.body.id}`).set(headers).expect(200);
+
+  await request(app).put('/todos/999999')
+    .set(headers)
+    .send({ title: 'Missing', description: 'Missing', completed: false })
+    .expect(404);
+  await request(app).patch('/todos/999999/toggle').set(headers).expect(404);
+  await request(app).delete('/todos/999999').set(headers).expect(404);
+});
