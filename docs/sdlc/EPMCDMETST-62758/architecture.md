@@ -1,7 +1,7 @@
 # Architecture Design
 
 - **Story ID**: EPMCDMETST-62758
-- **Requirements basis**: `docs/sdlc/EPMCDMETST-62758/requirements.md`. The user has explicitly resolved the repository/target mismatch and authorized a separate book-browsing feature in this repository with a small local sample catalog. This resolves the target decision from design review; it does not resolve the filter semantics listed below or constitute approval of unstated product behavior.
+- **Requirements basis**: `docs/sdlc/EPMCDMETST-62758/requirements.md`. The user has explicitly resolved the repository/target mismatch and authorized a separate book-browsing feature in this repository with a small local sample catalog. The user also explicitly approved the four filter policies recorded below on 2026-11-25 in this conversation, in response to the proposed defaults. The requirements artifact's open-question text is unchanged; this architecture records the later policy clarification.
 - **Repository stack**: Node.js, Express 4, static HTML/CSS, browser-native JavaScript, and JSON files. Tests use Node's built-in test runner and Supertest. No new dependency is proposed.
 
 ## Architecture recommendation
@@ -10,7 +10,7 @@ Add a small, independent book-browsing surface to this application rather than e
 
 The proposed `/books` page is a separate, public browsing page with Fiction and Non-Fiction genre scopes. It opens on Non-Fiction; both scopes use the same four filter categories and option definitions so the Fiction/Non-Fiction parity requirement has a concrete in-app reference. A small, static sample catalog in a server-side JSON file supplies demonstration records; it is not an authoritative or production book inventory. A book-specific query module, called by a new `/api/books` route, owns genre scoping and filtering. The catalog is outside `public/` so it is read through the API rather than exposed as a raw file.
 
-This design uses existing Express, static-file, JSON, and test conventions. It adds no framework, database, or package. Date-window, review-rating, missing-metadata, and same-category multi-select semantics remain unresolved; the suggested defaults in this document are proposals only and require product approval before implementation.
+This design uses existing Express, static-file, JSON, and test conventions. It adds no framework, database, or package. The date-window, review-rating, missing-metadata, and same-category selection policies are now explicit user-approved design decisions (see Approved filter semantics); they govern the API, controls, query behavior, and tests below.
 
 ## Component diagram
 
@@ -44,12 +44,12 @@ This design uses existing Express, static-file, JSON, and test conventions. It a
 
 | Component | Responsibility | Proposed files / boundary |
 |---|---|---|
-| Book browsing page | Provide a distinct route, genre scope controls, filter controls, result cards, and empty/error presentation. Default the genre to Non-Fiction. | `public/books.html`, `public/books.css`, `public/books.js`; `GET /books` serves the page. |
+| Book browsing page | Provide a distinct route, genre scope controls, single-select controls for each filter category, result cards, and empty/error presentation. Default the genre to Non-Fiction. | `public/books.html`, `public/books.css`, `public/books.js`; `GET /books` serves the page. |
 | Shared filter definitions | Hold the canonical labels and exact option values once, for use by both genre scopes and server-side validation. | `public/book-filter-options.json`. This file contains public UI configuration only, not book records. |
 | Book API route | Parse and validate book-specific query parameters, call the catalog boundary, and return JSON. Keep this route independent of `/todos` and its auth middleware. | New route in `todoServer.js`, e.g. `GET /api/books`. |
 | Catalog/query boundary | Load the local catalog, restrict to requested genre, apply selected category predicates, and return matching books. Keep filtering logic out of To-Do functions and browser-only state. | New `bookCatalog.js` module. |
 | Sample catalog | Supply a deliberately small, static set of Fiction and Non-Fiction records with fields needed for cards and filters. Include enough varied records to exercise the supported filter values and combined filters; the sample need not produce a match for every possible combination. | `data/books.json` (outside the static `public/` directory). |
-| Book tests | Cover the catalog query, API validation, combined filters, clearing, shared option parity, empty results, and errors without changing To-Do fixtures. | Proposed `tests/book-catalog.test.js` and `tests/books-api.integration.test.js`, following Node test runner/Supertest conventions. |
+| Book tests | Cover API cardinality and validation; exact date cutoffs using a controllable request-time reference; inclusive rating thresholds and unrated records; active/inactive category handling for missing or invalid metadata; AND across categories; clearing; shared option parity; empty results; catalog errors; and existing To-Do regressions without changing To-Do fixtures. | Proposed `tests/book-catalog.test.js` and `tests/books-api.integration.test.js`, following Node test runner/Supertest conventions. |
 
 ## Technology choices
 
@@ -67,7 +67,7 @@ This design uses existing Express, static-file, JSON, and test conventions. It a
 2. The page initializes in the Non-Fiction genre scope and renders all four required categories using the shared option definitions. A genre control allows the Fiction option set to be compared within the new book surface; the Story's target result view remains Non-Fiction.
 3. On initial load or a selection change, `books.js` sends the current genre and selected values to `GET /api/books`.
 4. The route validates the genre and filter tokens against the shared options and passes them to `bookCatalog.js`.
-5. The query boundary reads the local sample catalog, restricts it to the selected genre, then applies every selected category predicate. Selected filters across different categories are combined with AND, as required. Same-category multiple-selection behavior must not be assumed.
+5. The query boundary reads the local sample catalog, restricts it to the selected genre, then applies each selected category predicate. Selections across categories are combined with AND; each category accepts at most one selection.
 6. The route returns the matching records. The browser renders book cards, an empty state for a valid zero-match response, or a recoverable error while retaining the current selection.
 7. Clearing one filter omits that parameter on the next request while preserving other selections. Clearing all optional filters returns the broader catalog subset for the selected genre.
 
@@ -84,8 +84,8 @@ The local sample records should contain at least:
 | `genre` | `fiction` or `non-fiction`; used to scope the results. |
 | `format` | Format filter value. |
 | `language` | Language filter value. |
-| `publicationDate` | ISO date string used by publication-period filtering. |
-| `averageRating` | Numeric rating when known; scale/meaning remains a decision below. |
+| `publicationDate` | ISO date string used by UTC rolling-period filtering. |
+| `averageRating` | Numeric average on a 5-star scale when rated; absent/unrated values do not match an active Customer Reviews filter. |
 
 Records in `data/books.json` are illustrative, local, and read-only. Their values must be adequate to demonstrate filtering but must not be presented as complete inventory or product truth. Do not write sample books to `todos.json`, users, or sessions.
 
@@ -100,7 +100,7 @@ Visible labels and option sets are requirements. Suggested stable values are imp
 | Publication Date | last 30 days, last 6 months, last year | `last-30-days`, `last-6-months`, `last-year` |
 | Customer Reviews | 4-stars and above, 3-stars and above | `4-plus`, `3-plus` |
 
-The shared option file should be used for both genre scopes, making the displayed Fiction and Non-Fiction categories/options identical (FR-006). Do not add extra filter options in this Story. The query layer must apply all selected categories conjunctively (FR-004); per-category choice cardinality and the detailed predicate semantics remain subject to the open decisions below.
+The shared option file should be used for both genre scopes, making the displayed Fiction and Non-Fiction categories/options identical (FR-006). Do not add extra filter options in this Story. The query layer applies all selected categories conjunctively (FR-004); controls are single-select within each category. Predicate details are specified in Approved filter semantics.
 
 ### API contract
 
@@ -111,10 +111,10 @@ Proposed new contract; no book route currently exists.
 | Parameter | Proposed cardinality and values | Behavior |
 |---|---|---|
 | `genre` | Required; `fiction` or `non-fiction` | Restricts records to that genre. The page initially sends `non-fiction`. |
-| `format` | Optional; one of the shared Book Format values | Restricts by format. Multiple values are not defined until approved. |
-| `language` | Optional; one of the shared Language values | Restricts by language. Multiple values are not defined until approved. |
-| `publishedWithin` | Optional; one of the shared Publication Date values | Applies the selected publication window after its boundaries are approved. |
-| `minRating` | Optional; `4-plus` or `3-plus` | Applies the selected rating threshold after the scale and missing-value policy are approved. |
+| `format` | Optional; zero or one of the shared Book Format values | Restricts by exact format match. |
+| `language` | Optional; zero or one of the shared Language values | Restricts by exact language match. |
+| `publishedWithin` | Optional; zero or one of the shared Publication Date values | Applies the approved UTC rolling window and inclusive lower cutoff. |
+| `minRating` | Optional; zero or one of `4-plus` or `3-plus` | Applies the approved inclusive threshold to a numeric 5-star average. |
 
 Example:
 
@@ -122,29 +122,29 @@ Example:
 GET /api/books?genre=non-fiction&format=paperback&language=en&publishedWithin=last-30-days&minRating=4-plus
 ```
 
-The response is `200 application/json` with a JSON array of matching book records, including the fields needed by the page. A valid query with no matches returns `200 []`. Omit an optional parameter to clear that category; omit all optional filters for the broader genre result set. Reject unsupported genres, unknown tokens, malformed values, and unsupported duplicate/multi-value parameters with `400` rather than silently broadening results. Return a generic `500` response if the local catalog cannot be loaded or parsed; do not expose filesystem details.
+The response is `200 application/json` with a JSON array of matching book records, including the fields needed by the page. A valid query with no matches returns `200 []`. Omit an optional parameter to clear that category; omit all optional filters for the broader genre result set. Reject unsupported genres, unknown tokens, malformed values, duplicate instances of a filter parameter, and multi-value parameters with `400` rather than silently broadening results. Return a generic `500` response if the local catalog cannot be loaded, parsed, or validated; do not expose filesystem details.
 
 The sample is intentionally small, so pagination is not proposed for this Story. If the catalog grows beyond a bounded sample, pagination and response limits need a separate design decision. The route is public browsing data and should not call `requireAuth`; it must not change authorization behavior for `/todos`.
 
 ## Error handling
 
-- Invalid genre or filter values: return `400` with a stable, non-sensitive JSON error. Keep accepted values aligned with the shared filter-options file.
+- Invalid genre or filter values, including repeated or multi-value filter parameters: return `400` with a stable, non-sensitive JSON error. Keep accepted values aligned with the shared filter-options file.
 - Valid selection with no matching sample records: return `200 []`; render a no-results state distinct from a network/server failure.
-- Catalog read/parse failure: return `500` with a generic error; log server-side details using existing conventions if needed.
+- Catalog read, parse, or validation failure: fail closed with `500` and a generic error; log server-side details using existing conventions if needed.
 - Fetch failure in the browser: retain selected controls and show a recoverable error state; do not clear filters or imply that zero results were found.
-- Missing book metadata: do not infer a match or substitute a value. Filter behavior is blocked on the explicit missing-data decision below.
+- Missing or invalid metadata for a category: if that category's filter is active, the record does not match; if the category has no active filter, the record remains eligible under other active predicates.
 - Do not alter existing To-Do authentication, response shapes, routes, or data files.
 
-## Unresolved semantics and proposed defaults (approval required)
+## Approved filter semantics
 
-The requirements do not decide these behaviors. The suggested defaults are design proposals only; they are **not** user-agreed and must not be implemented as approved behavior until confirmed.
+The user explicitly approved the four policies below on **2026-11-25**, in this conversation, by approving the four previously proposed policies. This date/context records the approval without personal details. These are approved design clarifications for the semantics left open in the requirements; the requirements artifact itself was not edited.
 
-| Ambiguity | Requirements state | Proposed default for approval | Must be decided before |
-|---|---|---|---|
-| Publication date windows | “Last 30 days,” “last 6 months,” and “last year” do not specify calendar vs. duration arithmetic, timezone, reference instant, or cutoff inclusivity. | Use UTC and a request-time rolling reference; define windows as 30, 180, and 365 days respectively, including the lower bound. Confirm whether this is acceptable or choose calendar-month/year semantics instead. | Implementing date predicates and boundary tests. |
-| Rating representation and thresholds | Scale, precision, aggregation, inclusivity, and unrated-review behavior are unspecified. | Use a numeric 5-star average and inclusive `averageRating >= threshold` checks for 4-plus/3-plus; do not treat unrated books as meeting a threshold. Confirm the scale/source and comparison semantics. | Implementing rating predicates or rating boundary tests. |
-| Missing filter metadata | Handling of missing/invalid format, language, date, or rating is unspecified. | Keep records visible when no filter is selected; when a category filter is active, exclude records lacking valid metadata for that category rather than guessing a value. Confirm per-field behavior and whether data-quality warnings are needed. | Finalizing matching policy and missing-data tests. |
-| Multiple selections within one category | The requirements define AND across selected filters but do not say whether values within a category are multi-select or how they combine. | Permit at most one value per category (single-select controls); keep AND across categories. If multi-select is desired, product must define within-category OR/AND behavior before the API accepts arrays. | Choosing control type, query cardinality, and combination tests. |
+| Policy | Approved behavior | API, UI, and query implications |
+|---|---|---|
+| Publication windows | Use UTC rolling periods of 30, 180, and 365 days for “last 30 days,” “last 6 months,” and “last year,” respectively. Each window has an inclusive lower cutoff, evaluated against the current request-time reference. **The approved interpretation of six months and one year is 180 and 365 days, not calendar arithmetic.** | Keep the three existing visible options and tokens. A single `publishedWithin` value selects one period. Use a controllable reference time in date-boundary tests; a publication date exactly at the lower cutoff matches. |
+| Customer reviews | Use a numeric 5-star average. “4-stars and above” matches `averageRating >= 4`; “3-stars and above” matches `averageRating >= 3`. The comparisons are inclusive. Unrated records do not match when a review filter is active. | Keep one `minRating` value per request. Test exact-threshold inclusion, below-threshold exclusion, and unrated exclusion. |
+| Missing or invalid category metadata | When a filter is active, a record missing valid metadata for that category does not match. When that category has no active filter, missing metadata in that category alone does not hide the record; other active category filters still apply normally. | Evaluate the metadata predicate only when its category is selected. Do not invent, coerce, or substitute missing/invalid values. Test active-filter exclusion and unfiltered-category retention for each category. |
+| Multiple selections within one category | Each category is single-select. Different selected categories combine with AND. | Render single-select controls, accept at most one value for each API parameter, and reject duplicate or multi-value parameters with `400`. |
 
 The requirements also give no measurable performance, accessibility, responsive-layout, persistence, or empty-state-copy targets. Use existing page conventions and semantic HTML, but treat any additional product-level criteria as requiring approval rather than inventing acceptance thresholds.
 
@@ -154,7 +154,7 @@ The requirements also give no measurable performance, accessibility, responsive-
 |---|---|---|
 | The sample catalog is small and not authoritative. | A filter combination may legitimately return no sample rows; demo results cannot represent real inventory or prove real-world completeness. | Label/document it as sample data; test query semantics with controlled fixtures and avoid claiming catalog coverage. |
 | No Fiction browse or canonical filter implementation exists in the detected application. | Parity cannot be checked against a pre-existing storefront. | Make the shared option file the source for both Fiction and Non-Fiction scopes in the proposed books surface; test that both scopes render the same required categories and options. |
-| Date, rating, missing-data, and same-category selection semantics are open. | Different reasonable implementations would return different results and tests would not be deterministic. | Obtain approval for the proposed defaults or alternatives in the table before implementing those predicates. |
+| The requirements artifact retains its original open-question wording, while the user has since approved the policies in this architecture. | Readers relying only on requirements may miss the subsequent decisions. | Treat the dated approval record and explicit semantics in this architecture as controlling design guidance; requirements and plan files remain unchanged in this artifact-only revision. |
 | Catalog size may outgrow a simple JSON-backed sample. | Full-file reads and unpaginated responses would not scale to production inventory. | Keep this bounded to a small local sample; revisit storage, limits, and pagination before expanding beyond that purpose. |
 | Existing app has authentication and To-Do-specific client/API behavior. | Reusing those paths could accidentally expose book browsing to To-Do-specific coupling or change existing behavior. | Isolate route, page, client state, data, and tests; preserve `/`, `/todos`, `public/script.js`, and existing user/todo files. |
 
@@ -173,15 +173,24 @@ The requirements also give no measurable performance, accessibility, responsive-
 | AD-2 | Use a small local, read-only JSON catalog outside the static directory, with a book-specific query module and `/api/books` boundary. | User-authorized local-sample direction; design recommendation. |
 | AD-3 | Use one shared filter-options definition for Fiction and Non-Fiction, and combine selected categories with AND. | Design recommendation grounded in FR-004/FR-006. |
 | AD-4 | Add no framework, dependency, database, or changes to To-Do data/API. | Design recommendation based on current stack and scope. |
-| AD-5 | Date boundaries, rating policy, missing metadata, and same-category multi-select remain unapproved; tabled defaults require product approval. | Open decisions; no default is represented as agreed. |
+| AD-5 | Use UTC rolling publication windows of 30/180/365 days with inclusive lower cutoffs; use inclusive thresholds against numeric 5-star averages and exclude unrated books under an active review filter; exclude records with missing/invalid metadata only when that category is filtered; use single-select within categories and AND across categories. | Explicit user approval on 2026-11-25, recorded above. |
 
 ## Requirements traceability
 
 | Requirement | Architecture decision |
 |---|---|
 | FR-001 / AC-001 | `/books` renders the four required filter categories for the Non-Fiction scope using shared filter definitions. |
-| FR-002 / AC-002–AC-005 | The shared option definitions use exactly the required visible labels and values listed in the Filter Model. |
-| FR-003 / AC-006 | `/api/books` applies one selected category predicate to the selected genre; date/rating behavior awaits approval of boundary semantics. |
-| FR-004 / AC-007 | The book query boundary applies all selected categories conjunctively; same-category multi-selection remains an explicit open decision. |
-| FR-005 / AC-008 | The page omits the cleared parameter and retains other selections; omitting all optional filters restores all records in the chosen genre. |
+| FR-002 / AC-002–AC-005 | The shared option definitions use exactly the required visible labels and values listed in the Filter Model; controls are single-select. |
+| FR-003 / AC-006 | `/api/books` applies the selected single-category predicate to the selected genre; publication date and review predicates follow the approved UTC-window and inclusive numeric-rating policies. Unit tests cover exact date cutoffs with a controlled reference time, threshold boundaries, unrated records, and missing/invalid metadata behavior when the category is active versus absent. |
+| FR-004 / AC-007 | The query boundary applies all selected categories conjunctively; controls and API accept at most one value per category. Tests verify cross-category AND behavior and reject duplicate/multi-value filter parameters with `400`. |
+| FR-005 / AC-008 | The page omits the cleared parameter and retains other selections; omitting all optional filters restores all records in the chosen genre. Tests verify clearing one category preserves other filters. |
 | FR-006 / AC-009 | Fiction and Non-Fiction use the same shared categories/options on the proposed book surface; parity tests compare their rendered controls. |
+
+## Changes after design review
+
+| Decision ID | What changed | Where |
+|---|---|---|
+| UAP-1 | Recorded user approval for UTC rolling periods of 30/180/365 days with inclusive lower cutoffs; clarified that six months/one year mean 180/365 days. | Approved filter semantics; API contract; AD-5; FR-003 traceability. |
+| UAP-2 | Recorded numeric 5-star average and inclusive `>=4` / `>=3` review thresholds, with unrated books excluded under an active review filter. | Approved filter semantics; Filter Model; API contract; Error handling; FR-003 traceability. |
+| UAP-3 | Recorded conditional exclusion for missing/invalid category metadata: exclude only when that category's filter is active. | Approved filter semantics; Error handling; Risks; AD-5. |
+| UAP-4 | Recorded single-select cardinality within categories and AND across categories; aligned controls, request validation, and tests. | Data flow; Filter Model; API contract; Approved filter semantics; FR-004 traceability. |
