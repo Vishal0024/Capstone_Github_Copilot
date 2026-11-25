@@ -44,12 +44,12 @@ This design uses existing Express, static-file, JSON, and test conventions. It a
 
 | Component | Responsibility | Proposed files / boundary |
 |---|---|---|
-| Book browsing page | Provide a distinct route, genre scope controls, single-select controls for each filter category, result cards, and empty/error presentation. Default the genre to Non-Fiction. | `public/books.html`, `public/books.css`, `public/books.js`; `GET /books` serves the page. |
+| Book browsing page | Provide a distinct route, genre scope controls, single-select controls for each filter category, result cards, and empty/error presentation. Default the genre to Non-Fiction. Render every catalog-controlled field as text using DOM nodes and `textContent` (or an equivalent safe text-rendering API); never interpolate book data into `innerHTML`. | `public/books.html`, `public/books.css`, `public/books.js`; `GET /books` serves the page. |
 | Shared filter definitions | Hold the canonical labels and exact option values once, for use by both genre scopes and server-side validation. | `public/book-filter-options.json`. This file contains public UI configuration only, not book records. |
 | Book API route | Parse and validate book-specific query parameters, call the catalog boundary, and return JSON. Keep this route independent of `/todos` and its auth middleware. | New route in `todoServer.js`, e.g. `GET /api/books`. |
 | Catalog/query boundary | Load the local catalog, restrict to requested genre, apply selected category predicates, and return matching books. Keep filtering logic out of To-Do functions and browser-only state. | New `bookCatalog.js` module. |
-| Sample catalog | Supply a deliberately small, static set of Fiction and Non-Fiction records with fields needed for cards and filters. Include enough varied records to exercise the supported filter values and combined filters; the sample need not produce a match for every possible combination. | `data/books.json` (outside the static `public/` directory). |
-| Book tests | Cover API cardinality and validation; exact date cutoffs using a controllable request-time reference; inclusive rating thresholds and unrated records; active/inactive category handling for missing or invalid metadata; AND across categories; clearing; shared option parity; empty results; catalog errors; and existing To-Do regressions without changing To-Do fixtures. | Proposed `tests/book-catalog.test.js` and `tests/books-api.integration.test.js`, following Node test runner/Supertest conventions. |
+| Sample catalog | Supply a deliberately small, static top-level array of Fiction and Non-Fiction records with validated identity, display, genre, and optional filter fields. Include enough varied records to exercise the supported filter values and combined filters; the sample need not produce a match for every possible combination. | `data/books.json` (outside the static `public/` directory). |
+| Book tests | Cover API cardinality and validation; required catalog schema and optional metadata validation; exact date cutoffs using a controllable request-time reference; inclusive rating thresholds and unrated records; active/inactive category handling for missing or invalid metadata; AND across categories; clearing; shared option parity; empty results; catalog errors; safe-rendering checks with markup-like catalog text (literal text, no interpreted markup); and explicit To-Do route/auth/response regressions without changing To-Do fixtures or persistence. | Proposed `tests/book-catalog.test.js` and `tests/books-api.integration.test.js`, following Node test runner/Supertest conventions. |
 
 ## Technology choices
 
@@ -86,6 +86,26 @@ The local sample records should contain at least:
 | `language` | Language filter value. |
 | `publicationDate` | ISO date string used by UTC rolling-period filtering. |
 | `averageRating` | Numeric average on a 5-star scale when rated; absent/unrated values do not match an active Customer Reviews filter. |
+
+`data/books.json` must be a top-level JSON array; any other top-level shape, including an object or `null`, makes the catalog invalid. Each array entry must be an object with all of these required fields:
+
+| Required field | Validation |
+|---|---|
+| `id` | Non-empty string after trimming; unique within the catalog. |
+| `title` | Non-empty string after trimming; used as display text. |
+| `author` | Non-empty string after trimming; used as display text. |
+| `genre` | Exactly `fiction` or `non-fiction`. |
+
+An invalid top-level structure, non-object entry, duplicate/invalid identity, or missing/invalid required field invalidates the catalog as a whole. Do not silently drop records, coerce required values, or continue with a partial catalog.
+
+Filter metadata is optional, but each field must be checked when present. A present value outside its stated type/domain is invalid metadata (not a catalog-wide failure); missing and invalid metadata have the same matching behavior, described in Approved filter semantics. Do not coerce it or substitute a default.
+
+| Optional field | Valid value when present |
+|---|---|
+| `format` | String exactly one of `hardcover`, `paperback`, `ebook`, `audiobook`. |
+| `language` | String exactly one of `en`, `es`, `fr`, `de`. |
+| `publicationDate` | A real calendar date encoded as `YYYY-MM-DD`; compare as a UTC date for the approved rolling windows. |
+| `averageRating` | Finite JSON number from `0` through `5`, inclusive. Missing means unrated; a present non-number, non-finite/out-of-range value is invalid. |
 
 Records in `data/books.json` are illustrative, local, and read-only. Their values must be adequate to demonstrate filtering but must not be presented as complete inventory or product truth. Do not write sample books to `todos.json`, users, or sessions.
 
@@ -132,8 +152,14 @@ The sample is intentionally small, so pagination is not proposed for this Story.
 - Valid selection with no matching sample records: return `200 []`; render a no-results state distinct from a network/server failure.
 - Catalog read, parse, or validation failure: fail closed with `500` and a generic error; log server-side details using existing conventions if needed.
 - Fetch failure in the browser: retain selected controls and show a recoverable error state; do not clear filters or imply that zero results were found.
-- Missing or invalid metadata for a category: if that category's filter is active, the record does not match; if the category has no active filter, the record remains eligible under other active predicates.
-- Do not alter existing To-Do authentication, response shapes, routes, or data files.
+- Invalid top-level catalog structure or any invalid required record field: fail closed with a generic `500`; do not silently drop bad rows or broaden results by using partial data.
+- Missing or invalid optional metadata for a category: if that category's filter is active, the record does not match; if the category has no active filter, the record remains eligible under other active predicates. Invalid optional metadata alone does not invalidate the catalog.
+- Render all catalog-controlled values only as text via DOM nodes and `textContent` or an equivalent safe text-rendering API. Never interpolate book data into `innerHTML`.
+- Keep To-Do routes, authentication, response behavior, fixtures, and persistence unchanged.
+
+### Compatibility regression tests
+
+The integration suite must explicitly verify that `GET /` still serves the existing To-Do page; unauthenticated `GET /todos` remains protected with the existing unauthorized response; and authenticated `GET /todos` retains its existing `200` JSON-array response behavior and user scoping/filter/sort contract. These tests are regression assertions, not a reason to change To-Do routes or behavior. Use existing test conventions without modifying To-Do fixtures, `todos.json`, user/session persistence, or To-Do implementation.
 
 ## Approved filter semantics
 
@@ -157,6 +183,7 @@ The requirements also give no measurable performance, accessibility, responsive-
 | The requirements artifact retains its original open-question wording, while the user has since approved the policies in this architecture. | Readers relying only on requirements may miss the subsequent decisions. | Treat the dated approval record and explicit semantics in this architecture as controlling design guidance; requirements and plan files remain unchanged in this artifact-only revision. |
 | Catalog size may outgrow a simple JSON-backed sample. | Full-file reads and unpaginated responses would not scale to production inventory. | Keep this bounded to a small local sample; revisit storage, limits, and pagination before expanding beyond that purpose. |
 | Existing app has authentication and To-Do-specific client/API behavior. | Reusing those paths could accidentally expose book browsing to To-Do-specific coupling or change existing behavior. | Isolate route, page, client state, data, and tests; preserve `/`, `/todos`, `public/script.js`, and existing user/todo files. |
+| The local sample catalog may be malformed or contain unsafe/unexpected metadata. | A malformed required record could otherwise be silently omitted and produce incomplete or broadened results; unsafe rendering could interpret catalog text as markup. | Validate the entire top-level array and required fields before filtering; fail closed with generic `500` for structural/required-field errors. Validate optional filter fields without coercion and preserve approved conditional non-match semantics. Render catalog values only through safe text sinks, never by interpolating them into `innerHTML`. |
 
 ## Alternatives
 
@@ -174,6 +201,9 @@ The requirements also give no measurable performance, accessibility, responsive-
 | AD-3 | Use one shared filter-options definition for Fiction and Non-Fiction, and combine selected categories with AND. | Design recommendation grounded in FR-004/FR-006. |
 | AD-4 | Add no framework, dependency, database, or changes to To-Do data/API. | Design recommendation based on current stack and scope. |
 | AD-5 | Use UTC rolling publication windows of 30/180/365 days with inclusive lower cutoffs; use inclusive thresholds against numeric 5-star averages and exclude unrated books under an active review filter; exclude records with missing/invalid metadata only when that category is filtered; use single-select within categories and AND across categories. | Explicit user approval on 2026-11-25, recorded above. |
+| AD-6 | Protect compatibility: `/` continues serving the To-Do page, `/todos` retains its current authentication boundary and authenticated response behavior, and no To-Do fixtures or persistence are changed. | User-approved design-review decision D-3. |
+| AD-7 | Render every catalog-controlled field as text using `textContent` or equivalent safe DOM text rendering; never interpolate book data into `innerHTML`. | User-approved design-review decision D-4. |
+| AD-8 | Require a top-level catalog array with valid required identity/display/genre fields. Validate optional filter metadata when present; missing/invalid optional metadata is a non-match only when its category is active. Invalid catalog structure or required fields fail closed with generic `500`, never by dropping records or broadening results. | User-approved design-review decision D-5. |
 
 ## Requirements traceability
 
@@ -185,6 +215,9 @@ The requirements also give no measurable performance, accessibility, responsive-
 | FR-004 / AC-007 | The query boundary applies all selected categories conjunctively; controls and API accept at most one value per category. Tests verify cross-category AND behavior and reject duplicate/multi-value filter parameters with `400`. |
 | FR-005 / AC-008 | The page omits the cleared parameter and retains other selections; omitting all optional filters restores all records in the chosen genre. Tests verify clearing one category preserves other filters. |
 | FR-006 / AC-009 | Fiction and Non-Fiction use the same shared categories/options on the proposed book surface; parity tests compare their rendered controls. |
+| Design-review D-3 (compatibility) | Integration tests assert `/` serves the To-Do page, unauthenticated `/todos` remains protected, and authenticated `/todos` response behavior remains unchanged; do not alter To-Do fixtures or persistence. |
+| Design-review D-4 (safe rendering) | Book-card rendering uses `textContent` or equivalent safe DOM text sinks for every catalog-controlled field; catalog values are never interpolated into `innerHTML`. |
+| Design-review D-5 (catalog integrity) | The catalog is a top-level array with validated required `id`, `title`, `author`, and `genre`; present optional filter metadata is validated without coercion. Invalid structure/required fields produce generic `500`; optional missing/invalid metadata only excludes a record when its category is active. Tests cover each boundary. |
 
 ## Changes after design review
 
@@ -194,3 +227,6 @@ The requirements also give no measurable performance, accessibility, responsive-
 | UAP-2 | Recorded numeric 5-star average and inclusive `>=4` / `>=3` review thresholds, with unrated books excluded under an active review filter. | Approved filter semantics; Filter Model; API contract; Error handling; FR-003 traceability. |
 | UAP-3 | Recorded conditional exclusion for missing/invalid category metadata: exclude only when that category's filter is active. | Approved filter semantics; Error handling; Risks; AD-5. |
 | UAP-4 | Recorded single-select cardinality within categories and AND across categories; aligned controls, request validation, and tests. | Data flow; Filter Model; API contract; Approved filter semantics; FR-004 traceability. |
+| D-3 | Specified explicit regression assertions for the root To-Do page, protected `/todos`, and unchanged authenticated `/todos` response behavior; prohibited changes to To-Do fixtures and persistence. | Components and responsibilities; Error handling and Compatibility regression tests; Risks; AD-6; traceability. |
+| D-4 | Required safe text rendering for every catalog-controlled field and prohibited interpolating book data into `innerHTML`. | Components and responsibilities; Error handling; Risks; AD-7; traceability. |
+| D-5 | Defined the top-level array and required/optional field validation, conditional non-match behavior for optional metadata, and generic fail-closed handling for structural/required-field errors. | Components and responsibilities; Low-level design / Book record shape; Error handling; Risks; AD-8; traceability. |
