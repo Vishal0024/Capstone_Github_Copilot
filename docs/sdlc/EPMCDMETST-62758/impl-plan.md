@@ -1,54 +1,54 @@
 # Implementation Plan
 
 - **Story ID**: EPMCDMETST-62758
-- **Final architecture**: `docs/sdlc/EPMCDMETST-62758/architecture.md`
-- **Design review**: `docs/sdlc/EPMCDMETST-62758/design-review.md` — CHANGES REQUIRED; F-1 is a BLOCKER.
-- **Critical path**: T-001 → T-002/T-003 → T-005 → T-006 → T-007. T-004 also gates T-006.
-
-## Planning constraint and blocker
-
-The design-review BLOCKER is explicit: **no bookstore host, catalog, Fiction filters, or book API exists in this repository.** The current repository is a To-Do application. Do not implement a synthetic storefront/catalog/API here, change `/todos`, or use To-Do data as book data. Implementation tasks below are conditional on confirming the actual bookstore host and catalog owner (or receiving explicit approval to reassign the Story and an approved host-specific architecture). Their paths are therefore host-specific/TBD, not existing files in this repository.
+- **Final architecture**: `docs/sdlc/EPMCDMETST-62758/architecture.md` (approved revision `e0157ea5f7983e2219fb1394ead8ada37a9ff819`); design review `docs/sdlc/EPMCDMETST-62758/design-review.md` is **APPROVED WITH CHANGES**.
+- **Critical path**: T-001 → T-003 → T-004 → T-005 → T-006 → T-009 → T-010. T-001 is a product-decision gate. T-003 through T-008 must not implement or test unapproved policy. This is the longest dependency chain; no durations are estimated.
 
 ## Dependency-ordered tasks
 
 | ID | Priority | Description | Files | Depends on | Requirement/AC |
 |---|---|---|---|---|---|
-| T-001 | P1 | Confirm the intended bookstore host/repository and catalog/API owner, and identify the authoritative Fiction filter set and catalog source. Alternatively, obtain explicit approval to reassign the Story to this repository and an approved design that establishes the storefront/catalog boundary. Do not start implementation without this decision. | External product/repository ownership decision; no corresponding host files exist here. | None | FR-001; AC-001, AC-009 |
-| T-002 | P1 | With the confirmed product/catalog owners, settle and record date-window semantics (timezone, definition of “today,” cutoff inclusivity, calendar versus elapsed periods) and rating/data policies (scale/precision, unrated or invalid metadata). Update the approved requirements/architecture through the normal review workflow before implementation. | Approved `requirements.md` and `architecture.md`; locations in the confirmed host TBD. | T-001 | FR-004–FR-005; AC-004–AC-006 |
-| T-003 | P1 | Inspect the confirmed host's listing/API conventions and specify bounded pagination/result behavior, filter behavior across pages, authorization, CORS, validation, and error-envelope policies. Update the host-specific design before implementing an endpoint. | Confirmed host API/design locations TBD; no book API exists here. | T-001 | FR-001, FR-003; AC-006–AC-009 |
-| T-004 | P1 | In the confirmed storefront, provide the Non-Fiction listing's four exact filter groups/options and ensure they use or are verified against the host's Fiction filter set. Keep the feature separate from To-Do UI. | Confirmed host listing, shared filter configuration/components, and styles; paths TBD. | T-001 | FR-001–FR-002; AC-001–AC-005, AC-009 |
-| T-005 | P1 | In the host's authoritative catalog/query layer, validate filter tokens and implement OR matching within each selected category and AND matching across categories. Apply the approved relative-date policy and inclusive rating thresholds to authoritative metadata, follow host pagination, and return valid empty results without broadening invalid queries. | Confirmed host catalog/query/API and metadata mapping; paths TBD. | T-001, T-002, T-003 | FR-003–FR-005; AC-004–AC-007 |
-| T-006 | P1 | Connect the Non-Fiction listing controller to the host API: preserve Non-Fiction scope and current selections, send the full filter state, render matching/empty/error results, and clear a selection while retaining other selections. | Confirmed host listing/controller and result renderer; paths TBD. | T-004, T-005 | FR-003, FR-006; AC-006–AC-008 |
-| T-007 | P1 | Add and run host-convention unit, integration, and browser/UI verification for exact option parity, filter serialization, OR/AND behavior, approved date/rating boundaries, pagination, clearing, empty/error results, and Non-Fiction scope. | Confirmed host test locations and test runner; paths TBD. | T-004, T-005, T-006 | FR-001–FR-006; AC-001–AC-009 |
+| T-001 | P1 | Obtain and record explicit user/product decisions for (1) publication-window arithmetic, timezone/reference instant, and cutoff inclusivity; (2) rating scale, aggregation/precision, threshold inclusivity, and unrated handling; (3) missing/invalid metadata behavior per filter field; and (4) same-category selection cardinality and combination semantics. Record the actual answers, not the architecture's proposed defaults. If answers require changing the approved API or design, obtain the applicable design update/approval before dependent implementation proceeds. | `docs/sdlc/EPMCDMETST-62758/requirements.md`; if needed, an approved update to `docs/sdlc/EPMCDMETST-62758/architecture.md` | None | FR-003–FR-005; AC-006–AC-008; open semantics in requirements and architecture |
+| T-002 | P1 | Add the single shared public filter-options definition for both genre scopes. Use the exact required category and option labels; keep implementation tokens distinct from visible labels. Do not encode or imply single-/multi-select behavior in the definitions. | `public/book-filter-options.json` | None | FR-001, FR-002, FR-006; AC-001–AC-005, AC-009 |
+| T-003 | P1 | Add the bounded, illustrative, read-only local catalog outside `public/` and the book-specific query boundary. Implement genre scoping and approved predicates; validate the catalog's top-level shape and required record fields and fail closed on invalid catalog data with a generic server error. Keep filter-metadata validation consistent with the recorded missing-data decision; do not silently drop malformed records, infer values, or broaden results. Design the query boundary to support a controlled time source for deterministic date-boundary tests. | `data/books.json`, `bookCatalog.js` | T-001, T-002 | FR-003–FR-005; AC-006–AC-008 |
+| T-004 | P1 | Add public `GET /api/books` in Express, delegating filtering to the book query boundary. Validate genre and filter values and the approved same-category cardinality; return `400` for invalid input, `200 []` for valid empty results, and a generic `500` for catalog failures. Keep the route independent of To-Do auth and preserve existing `/todos` behavior and response contracts. | `todoServer.js` | T-001, T-002, T-003 | FR-003–FR-005; AC-006–AC-008 |
+| T-005 | P1 | Build the separate `/books` page and styling, defaulting to Non-Fiction and presenting the shared categories/options for both Fiction and Non-Fiction. Implement the filter controls only after same-category cardinality is decided. Keep the root To-Do page and its assets unchanged. | `public/books.html`, `public/books.css` | T-001, T-002, T-004 | FR-001, FR-002, FR-006; AC-001–AC-005, AC-009 |
+| T-006 | P1 | Implement the isolated browser client: request results from `/api/books`, combine categories according to approved semantics, preserve remaining selections when clearing one filter, show valid empty results separately from recoverable request errors, and retain selections on error. Render all catalog-controlled fields using safe DOM text APIs such as `textContent`; do not interpolate book data into `innerHTML`. | `public/books.js` | T-001, T-004, T-005 | FR-003–FR-006; AC-006–AC-009; design-review D-4 |
+| T-007 | P1 | Add unit coverage for query behavior, genre isolation, combined categories, clearing, every supported option, empty results, invalid catalog shape/required fields, and fail-closed behavior. After T-001, cover approved date/rating boundaries using a controlled time source and the decided missing-metadata and same-category policies. Verify the shared options expose identical exact categories/options for both scopes. Extend lint/coverage scripts to include new JavaScript and query-module coverage without adding dependencies. | `tests/book-catalog.test.js`, `package.json` | T-001, T-002, T-003 | FR-002–FR-006; AC-002–AC-009; design-review D-3, D-5 |
+| T-008 | P1 | Add API integration coverage for valid and invalid queries, single and combined filters, approved duplicate/multiple-value behavior, valid no-match response, generic catalog failures, and public unauthenticated book browsing. Assert `/books` is served, `/` remains the To-Do page, and the existing `/todos` authentication/response contract is unchanged. Do not change To-Do fixtures or persistence. | `tests/books-api.integration.test.js` | T-001, T-004, T-005 | FR-001, FR-003–FR-006; AC-001, AC-006–AC-009; design-review D-3, D-5 |
+| T-009 | P1 | Perform a focused browser smoke check of the `/books` flow: initial Non-Fiction scope, parity of exact filter labels/options in both scopes, selection/clearing behavior, empty and recoverable error states, and safe display of catalog-controlled text. Record any defects for correction before final verification. | No planned file change | T-006, T-007, T-008 | FR-001–FR-006; AC-001–AC-009; design-review D-3, D-4 |
+| T-010 | P1 | Run final regression and verification checks after implementation: unit/integration/full test scripts, lint, coverage, and a diff review confirming no unrelated To-Do/auth/data changes or new dependencies. Confirm the local catalog remains bounded and non-authoritative; do not add pagination or production-catalog claims. | No planned file change | T-006, T-007, T-008, T-009 | FR-001–FR-006; AC-001–AC-009; design-review D-3, D-5 |
 
 ## Blocked tasks
 
+These are intentional product-decision gates, not permission to choose the architecture's proposed defaults. T-001 must record explicit answers before the affected implementation and its policy-dependent tests begin.
+
 | Task | Blocked until | Reason |
 |---|---|---|
-| T-001 | Product/Story owner confirms the bookstore host/repository and catalog/API owner, or explicitly approves reassignment with an approved host design. | F-1 BLOCKER: this repository has no bookstore host, catalog, Fiction filters, or book API; the integration target and source of truth are unknown. |
-| T-002 | T-001; date and rating/data policy decisions from the confirmed owners. | Date boundaries, rating scale, and missing/invalid metadata behavior are not defined; deterministic implementation and boundary tests require owner decisions. |
-| T-003 | T-001; the confirmed host's API/security/operational conventions. | Pagination, authorization, CORS, and API ownership are host-specific and cannot be inferred from this To-Do application's configuration. |
-| T-004 | T-001 and confirmation of the host's Fiction option set. | There is no listing or Fiction filter implementation in this repository to extend or compare against. |
-| T-005 | T-001, T-002, and T-003. | The authoritative catalog, metadata schema, policies, and API boundary do not exist here or have not been identified. |
-| T-006 | T-004 and T-005. | No host listing/controller or book API is available to connect. |
-| T-007 | T-001 through T-006 and a confirmed host test environment. | Host-specific UI, API, data, and test conventions are unknown; tests against the To-Do app would not verify this Story. |
+| T-003 | T-001 records date-window, rating, and per-field missing-metadata policies. | Catalog values, record validation, and query predicates must not encode unsettled date/rating or absent-metadata behavior. |
+| T-004 | T-001 records date-window, rating, missing-metadata, and same-category selection policies. | API predicate behavior, optional-value handling, and duplicate/multi-value validation depend on these decisions. |
+| T-005 | T-001 records same-category selection cardinality/semantics. | The UI control type and allowed selection behavior cannot be selected by assumption. |
+| T-006 | T-001 records all four policy decisions. | Request construction, selection state, and rendered-result behavior must match the approved query semantics. |
+| T-007 | T-001 records all four policy decisions. | Date/rating boundary, missing-data, and same-category tests would otherwise make an unapproved policy appear authoritative. |
+| T-008 | T-001 records all four policy decisions. | API integration expectations for filter predicates and parameter cardinality require settled semantics. |
 
 ## Verification plan
 
 | Check | Evidence |
 |---|---|
-| Confirm bookstore target, catalog/API owner, Fiction option source, or explicit reassignment and approved host architecture. | Recorded owner decision and approved design; resolves F-1 before implementation begins. |
-| Confirm deterministic date/rating/data policies and host endpoint/security/pagination conventions. | Approved requirements/architecture updates and host API contract; resolves F-2 and addresses F-3/F-4. |
-| Verify exact filter groups/options and parity with Fiction. | Host UI/component tests for AC-001–AC-005 and AC-009. |
-| Verify catalog filter semantics, metadata boundaries, and bounded pagination. | Host unit/integration tests for OR within categories, AND across categories, date/rating boundaries, invalid tokens, and filtered pagination (AC-004–AC-007). |
-| Verify listing integration and clearing behavior. | Host browser/integration tests for Non-Fiction scope, selections, empty/error response handling, and clearing with remaining selections (AC-006–AC-008). |
-| Verify no unrelated To-Do behavior or protected data is changed. | Review the final change set against the approved host-specific plan; do not modify To-Do UI, `/todos`, or protected JSON data for this feature. |
+| Dependency graph | Tasks are ordered by dependency; T-001 and T-002 are roots. T-003 → T-004 → T-005 → T-006 → T-009 → T-010 forms the stated longest chain; T-007 and T-008 converge into final verification. No dependency cycles. |
+| Product decision gate | Requirements/design record contains explicit answers for date windows, rating policy, missing metadata, and same-category selection before dependent work starts; any needed architecture changes receive approval. |
+| Unit tests | `npm run test:unit` covers query behavior, shared option parity, all approved edge policies, catalog shape failures, and deterministic date boundaries. |
+| API/regression tests | `npm run test:integration` covers the new public API and `/books`, plus `/` and existing `/todos` authentication/response behavior. |
+| Full checks | `npm test`, `npm run lint`, and `npm run coverage`; coverage includes the book query module and no new dependency is required. |
+| Browser check | Smoke-check `/books` for controls/options, default scope, filtering/clearing, empty/error distinction, and safe text rendering. |
+| Scope and data safety | Review the final diff: To-Do page/API/auth and user/todo/session data remain unchanged; catalog is outside `public/`, read-only, bounded, and clearly sample-only. Invalid catalog structures fail closed with generic client-facing errors. |
 
 ## Definition of Done
 
-- [ ] T-001 is resolved and the implementation target/catalog source is approved; no implementation begins while F-1 remains unresolved.
-- [ ] T-002 and T-003 decisions are recorded in approved host-specific requirements/design before the affected implementation tasks begin.
-- [ ] Tasks T-004–T-006 implement the approved host integration and satisfy FR-001–FR-006 / AC-001–AC-009.
-- [ ] T-007 tests pass in the confirmed host and cover the verification cases above, including missing/invalid data and Not Found/empty results as defined by the approved host policy.
-- [ ] Fiction parity is verified against the host's authoritative filter set.
-- [ ] Changes remain within the approved implementation plan; no synthetic bookstore/catalog is added to the To-Do repository.
+- [ ] All tasks are completed in dependency order, with T-001 decisions recorded before dependent implementation.
+- [ ] All six functional requirements and nine acceptance criteria are covered; approved semantics are used without substituting proposed defaults.
+- [ ] Tests cover happy paths, missing/invalid/Not Found cases, deterministic time boundaries, catalog validation failures, and existing To-Do regressions.
+- [ ] Review D-3, D-4, and D-5 considerations are implemented and verified.
+- [ ] No out-of-plan changes, new dependencies, protected-path changes, or modifications to existing To-Do persistence/contracts.
+- [ ] The local sample remains bounded and is not represented as authoritative inventory.
