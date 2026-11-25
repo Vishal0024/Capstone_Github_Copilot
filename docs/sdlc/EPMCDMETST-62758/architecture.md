@@ -1,143 +1,187 @@
 # Architecture Design
 
 - **Story ID**: EPMCDMETST-62758
-- **Requirements basis**: `docs/sdlc/EPMCDMETST-62758/requirements.md` is committed on this feature branch. It has no explicit approval marker; its Jira evidence reports the Story as Open, so independent human approval cannot be verified from the available artifact.
-- **Repository stack**: Node.js / Express 4, static HTML/CSS, browser-native JavaScript, and JSON-file persistence. Tests use Node's built-in test runner and Supertest.
+- **Requirements basis**: `docs/sdlc/EPMCDMETST-62758/requirements.md`. The user has explicitly resolved the repository/target mismatch and authorized a separate book-browsing feature in this repository with a small local sample catalog. This resolves the target decision from design review; it does not resolve the filter semantics listed below or constitute approval of unstated product behavior.
+- **Repository stack**: Node.js, Express 4, static HTML/CSS, browser-native JavaScript, and JSON files. Tests use Node's built-in test runner and Supertest. No new dependency is proposed.
 
 ## Architecture recommendation
 
-The requested feature belongs to a Non-Fiction book listing and its book catalog. The detected application is a To-Do application: `index.html`, `public/script.js`, `todoServer.js`, and the existing integration tests contain no book listings, Fiction implementation, book metadata, or catalog API. Therefore there is no honest in-repository component to extend, and the feature cannot be integrated end-to-end here without first identifying/providing the bookstore host and its authoritative catalog source.
+Add a small, independent book-browsing surface to this application rather than extending the To-Do screens, client state, API, or JSON data. Keep the existing root page (`/`), To-Do client (`public/script.js`), and `/todos` contract unchanged.
 
-Design the feature as a host-owned listing capability: render the four filter groups in the existing Fiction/Non-Fiction book-browsing experience, keep selected filters in the listing controller, and query the host's catalog API. Apply filtering against authoritative catalog metadata (preferably in the catalog/query layer), requiring results to satisfy all selected filters across categories. Same-category multi-selection behavior is unspecified and must not be inferred. Do not modify the To-Do UI, its `/todos` contract, or its JSON data files to simulate a bookstore. No dependencies are required.
+The proposed `/books` page is a separate, public browsing page with Fiction and Non-Fiction genre scopes. It opens on Non-Fiction; both scopes use the same four filter categories and option definitions so the Fiction/Non-Fiction parity requirement has a concrete in-app reference. A small, static sample catalog in a server-side JSON file supplies demonstration records; it is not an authoritative or production book inventory. A book-specific query module, called by a new `/api/books` route, owns genre scoping and filtering. The catalog is outside `public/` so it is read through the API rather than exposed as a raw file.
 
-The components and `/api/books` contract below are a proposed integration boundary, not existing repository capabilities. They become implementation locations only after the actual bookstore host, catalog schema/source, and API ownership are confirmed. If the Story is explicitly reassigned to this repository, implement it as a separate book-browsing surface and route rather than coupling it to To-Do screens or changing `/todos`.
+This design uses existing Express, static-file, JSON, and test conventions. It adds no framework, database, or package. Date-window, review-rating, missing-metadata, and same-category multi-select semantics remain unresolved; the suggested defaults in this document are proposals only and require product approval before implementation.
 
 ## Component diagram
 
 ```text
-                         (storefront host not present in this repository)
 [Shopper]
     |
     v
-[Fiction / Non-Fiction book listing]
-    | renders labels/options; captures selections
+[/books page: public/books.html + isolated books.js/books.css]
+    | genre + selected filters
+    | GET /api/books?genre=non-fiction&...
     v
-[Book-filter controller and selection state]
-    | GET /api/books?genre=non-fiction&... (proposed contract)
+[Express book route in todoServer.js]
+    |
     v
-[Catalog query/API] ---> [Authoritative book catalog and metadata]
-    | filtered books / errors
+[Book catalog/query boundary: bookCatalog.js]
+    | reads / validates against
+    +-----------------------> [data/books.json: small local sample catalog]
+    +-----------------------> [public/book-filter-options.json: shared options]
+    |
     v
-[Listing renderer and empty/error state] ---> [Shopper]
+[Matching book records or API error]
+    |
+    v
+[Books page renders cards, empty state, or recoverable error]
 
-[Current To-Do app: index.html, public/script.js, todoServer.js,
- tests/todo-api.integration.test.js] -- outside this feature boundary -->
+[Existing To-Do page /, public/script.js, /todos, and user/todo JSON]
+    -- remains a separate, unchanged application surface --
 ```
 
 ## Components and responsibilities
 
-| Component | Responsibility | Files |
+| Component | Responsibility | Proposed files / boundary |
 |---|---|---|
-| Book listing host | Establish Non-Fiction scope, render result cards, expose the matching Fiction filter set, and own listing lifecycle. | Not present. Locate in the actual bookstore application before implementation. |
-| Filter controls and controller | Render the exact option groups, track selections, serialize selection changes, and refresh results while preserving the Non-Fiction scope. | Not present. If this repository is confirmed as host, use a separate book-specific static page/module (candidate `public/books.html` and `public/book-filters.js`); do not attach book behavior to To-Do controls in `index.html` or `public/script.js`. |
-| Catalog API/query | Validate filter tokens and combine category predicates; return only matching Non-Fiction records. | Not present. The proposed `GET /api/books` is a host-owned interface, not a route currently implemented by `todoServer.js`. |
-| Catalog data source | Supply format, language, publication date, and customer rating for each book; provide Fiction data/options for parity. | Not present; source, schema, ownership, and missing-metadata policy are unknown. |
-| Book-filter tests | Verify option parity, URL/query serialization, category combination, date/rating boundaries, clearing, and empty results. | Not present. Add tests alongside the bookstore host's existing test conventions once identified; current tests only cover To-Do API and Git safety. |
+| Book browsing page | Provide a distinct route, genre scope controls, filter controls, result cards, and empty/error presentation. Default the genre to Non-Fiction. | `public/books.html`, `public/books.css`, `public/books.js`; `GET /books` serves the page. |
+| Shared filter definitions | Hold the canonical labels and exact option values once, for use by both genre scopes and server-side validation. | `public/book-filter-options.json`. This file contains public UI configuration only, not book records. |
+| Book API route | Parse and validate book-specific query parameters, call the catalog boundary, and return JSON. Keep this route independent of `/todos` and its auth middleware. | New route in `todoServer.js`, e.g. `GET /api/books`. |
+| Catalog/query boundary | Load the local catalog, restrict to requested genre, apply selected category predicates, and return matching books. Keep filtering logic out of To-Do functions and browser-only state. | New `bookCatalog.js` module. |
+| Sample catalog | Supply a deliberately small, static set of Fiction and Non-Fiction records with fields needed for cards and filters. Include enough varied records to exercise the supported filter values and combined filters; the sample need not produce a match for every possible combination. | `data/books.json` (outside the static `public/` directory). |
+| Book tests | Cover the catalog query, API validation, combined filters, clearing, shared option parity, empty results, and errors without changing To-Do fixtures. | Proposed `tests/book-catalog.test.js` and `tests/books-api.integration.test.js`, following Node test runner/Supertest conventions. |
 
 ## Technology choices
 
 | Decision | Reason | Rejected alternatives |
 |---|---|---|
-| Reuse the storefront's existing UI and API stack; if the host is this repository, use browser-native JavaScript and existing Express rather than adding a framework. | Matches the detected stack and honors the no-dependency constraint, while avoiding a fabricated host migration. | Introducing React/Vue or another framework; adding a filter package; replacing the application architecture. |
-| Keep filter controls/controller separate from To-Do UI and endpoints. | Book metadata and discovery are a separate domain; existing To-Do controls and `/todos` semantics cannot safely represent them. | Extending `currentFilter` or `GET /todos`; using To-Do JSON records as book data. |
-| Apply predicates where the authoritative catalog is queried, behind the bookstore's listing API. | Keeps behavior consistent across clients and avoids downloading an unbounded catalog for browser-only filtering. | Client-only filtering as the assumed design; it is only viable if the host's actual catalog is deliberately small and already fully loaded (not established here). |
-| Keep selected filters in listing/controller state and send them with each request. | Supports immediate refresh and clearing; persistence across reloads/navigation/sessions is unspecified. | Persisting in local storage, sessions, or permanent user preferences without a requirement. |
+| Use a separate `/books` page and book-specific JS/CSS. | Keeps the new browse experience separate from the To-Do UI and its existing authentication-dependent lifecycle. | Adding book controls to `index.html` or `public/script.js`. |
+| Use a small local JSON catalog read by an Express-backed query module. | Meets the user's explicit local-sample-catalog decision and provides a stable book-specific query boundary for combined filters. | Reusing `todos.json`, placing book data in user/todo files, or pretending a production bookstore service exists. |
+| Use one shared filter-options JSON file for both Fiction and Non-Fiction controls and query validation. | Reduces drift and provides a direct way to meet/test category and option parity. | Maintaining two independent option lists in frontend and backend code. |
+| Use the existing Express and browser-native technologies. | Matches `package.json`, `todoServer.js`, and existing static-page conventions; no requirement forces a new framework. | Adding a frontend framework, a filtering package, or a database dependency. |
+| Keep the sample catalog read-only and filter in the server-side book query boundary. | The sample is demonstration data; server-side filtering provides a defined contract and exercises the intended separation even with a small catalog. | Client-only filtering coupled to To-Do client state or mutating existing JSON persistence. |
 
 ## Data flow
 
-1. The host opens the Non-Fiction listing and renders exactly the same four groups and option sets as its Fiction book listing (FR-001/FR-002, AC-001–AC-005, AC-009).
-2. The controller captures the shopper's current selections and retains the Non-Fiction scope. Whether multiple values can be selected in one category is not specified.
-3. The controller sends the current selection to the proposed catalog listing API. The exact request encoding for multiple values in one category must follow a product/catalog decision; the repeatable query parameters below are only a candidate contract.
-4. The catalog query validates values and applies the selected filters so the result satisfies all selected filters across categories. Same-category combination behavior and date/rating boundaries must be confirmed before implementation.
-5. The API returns the matching books. The host renders them; an empty array produces the host's no-results state. The exact empty-state wording/layout is not specified.
-6. Clearing an option updates only that category's selection and repeats the query. Clearing all options returns the broader Non-Fiction result set.
+1. The shopper opens `/books`; the existing `/` route continues to serve the To-Do application.
+2. The page initializes in the Non-Fiction genre scope and renders all four required categories using the shared option definitions. A genre control allows the Fiction option set to be compared within the new book surface; the Story's target result view remains Non-Fiction.
+3. On initial load or a selection change, `books.js` sends the current genre and selected values to `GET /api/books`.
+4. The route validates the genre and filter tokens against the shared options and passes them to `bookCatalog.js`.
+5. The query boundary reads the local sample catalog, restricts it to the selected genre, then applies every selected category predicate. Selected filters across different categories are combined with AND, as required. Same-category multiple-selection behavior must not be assumed.
+6. The route returns the matching records. The browser renders book cards, an empty state for a valid zero-match response, or a recoverable error while retaining the current selection.
+7. Clearing one filter omits that parameter on the next request while preserving other selections. Clearing all optional filters returns the broader catalog subset for the selected genre.
 
 ## Low-level design
 
+### Book record shape
+
+The local sample records should contain at least:
+
+| Field | Purpose |
+|---|---|
+| `id` | Stable identifier for rendering and tests. |
+| `title`, `author` | Card display. |
+| `genre` | `fiction` or `non-fiction`; used to scope the results. |
+| `format` | Format filter value. |
+| `language` | Language filter value. |
+| `publicationDate` | ISO date string used by publication-period filtering. |
+| `averageRating` | Numeric rating when known; scale/meaning remains a decision below. |
+
+Records in `data/books.json` are illustrative, local, and read-only. Their values must be adequate to demonstrate filtering but must not be presented as complete inventory or product truth. Do not write sample books to `todos.json`, users, or sessions.
+
 ### Filter model
 
-Keep stable API tokens separate from visible labels. The following tokens are proposed; the required visible labels and option sets are authoritative. Token mapping must be aligned with the real catalog model.
+Visible labels and option sets are requirements. Suggested stable values are implementation tokens only; token spelling can be adjusted to fit the chosen JSON contract without changing labels.
 
-| Category | Visible options | Proposed API tokens |
+| Category | Required visible options | Suggested values |
 |---|---|---|
 | Book Format | hardcover, paperback, eBook, audiobook | `hardcover`, `paperback`, `ebook`, `audiobook` |
 | Language | English, Spanish, French, German | `en`, `es`, `fr`, `de` |
 | Publication Date | last 30 days, last 6 months, last year | `last-30-days`, `last-6-months`, `last-year` |
 | Customer Reviews | 4-stars and above, 3-stars and above | `4-plus`, `3-plus` |
 
-Options are exact: do not expose additional values unless the matching Fiction filter set changes through separate scope/approval. When multiple categories are selected, results must satisfy all selected filters. The requirements do not state whether a shopper can select multiple values within one category or how such values combine; do not assume OR or AND. “Last 30 days,” “last 6 months,” and “last year” do not define cutoffs, timezone, or calendar-versus-duration semantics. “4-stars and above” and “3-stars and above” do not specify inclusivity, rating scale, precision, or unrated-item behavior. Confirm these policies with the product/catalog owner and test the agreed behavior before implementation.
+The shared option file should be used for both genre scopes, making the displayed Fiction and Non-Fiction categories/options identical (FR-006). Do not add extra filter options in this Story. The query layer must apply all selected categories conjunctively (FR-004); per-category choice cardinality and the detailed predicate semantics remain subject to the open decisions below.
 
-### Date and rating evaluation
+### API contract
 
-- The date labels imply recency choices but do not define their evaluation. Confirm the reference date, timezone, day boundary, cutoff inclusivity, and calendar-versus-duration calculation with product/catalog owners before implementation. Encode the agreed policy centrally and test its boundaries.
-- Confirm the rating scale, threshold inclusivity, precision, and handling of unrated books with product/catalog owners before implementation. Do not encode assumed `>=` comparisons as approved behavior.
-
-### Proposed API contract (not implemented in this repository)
+Proposed new contract; no book route currently exists.
 
 `GET /api/books`
 
-| Parameter | Cardinality / values | Meaning |
+| Parameter | Proposed cardinality and values | Behavior |
 |---|---|---|
-| `genre` | Required; `non-fiction` for this listing | Restricts the listing to Non-Fiction. The host must map this token to its authoritative genre/category model. |
-| `format` | Candidate optional parameter; `hardcover`, `paperback`, `ebook`, `audiobook` | Filter by the selected format. Multiple values/cardinality and their combination semantics require product/catalog confirmation. |
-| `language` | Candidate optional parameter; `en`, `es`, `fr`, `de` | Filter by the selected language. Multiple values/cardinality and their combination semantics require product/catalog confirmation. |
-| `publishedWithin` | Candidate optional parameter; `last-30-days`, `last-6-months`, `last-year` | Filter by the selected publication-period label. Cutoff and multiple-value semantics require confirmation. |
-| `minRating` | Candidate optional parameter; `4-plus`, `3-plus` | Filter by the selected review label. Threshold inclusivity and multiple-value semantics require confirmation. |
+| `genre` | Required; `fiction` or `non-fiction` | Restricts records to that genre. The page initially sends `non-fiction`. |
+| `format` | Optional; one of the shared Book Format values | Restricts by format. Multiple values are not defined until approved. |
+| `language` | Optional; one of the shared Language values | Restricts by language. Multiple values are not defined until approved. |
+| `publishedWithin` | Optional; one of the shared Publication Date values | Applies the selected publication window after its boundaries are approved. |
+| `minRating` | Optional; `4-plus` or `3-plus` | Applies the selected rating threshold after the scale and missing-value policy are approved. |
 
-Example request:
+Example:
 
 ```http
 GET /api/books?genre=non-fiction&format=paperback&language=en&publishedWithin=last-30-days&minRating=4-plus
 ```
 
-The example illustrates one value per category; all selected categories must be satisfied. Exact publication-date and review-threshold matching still depends on product/catalog decisions.
+The response is `200 application/json` with a JSON array of matching book records, including the fields needed by the page. A valid query with no matches returns `200 []`. Omit an optional parameter to clear that category; omit all optional filters for the broader genre result set. Reject unsupported genres, unknown tokens, malformed values, and unsupported duplicate/multi-value parameters with `400` rather than silently broadening results. Return a generic `500` response if the local catalog cannot be loaded or parsed; do not expose filesystem details.
 
-Proposed success response: `200 application/json`, a JSON array of records in the host's established book DTO shape. Minimum fields needed to render/filter are a stable book identifier and the authoritative format, language, publication date, and numeric customer rating (plus any fields the existing host requires to render a card). Do not create a new persisted schema before inspecting the real catalog.
-
-No separate clear endpoint is needed: omit a query parameter to clear that category, and omit all optional filter parameters to clear all filters. A valid selection with no matches returns `200` and `[]`. Unknown or malformed filter tokens should return `400` with a stable JSON error shape; catalog/service failures should return `5xx` without leaking internals. Authentication, pagination, sorting, and response compatibility are host-specific and not specified by the Story; preserve the host's existing policies rather than assuming To-Do authentication or adding new policies.
+The sample is intentionally small, so pagination is not proposed for this Story. If the catalog grows beyond a bounded sample, pagination and response limits need a separate design decision. The route is public browsing data and should not call `requireAuth`; it must not change authorization behavior for `/todos`.
 
 ## Error handling
 
-- Reject unknown category tokens at the API boundary with `400`; do not silently broaden results after an invalid selection.
-- Return `200 []` for a valid filter combination with no matches. The UI should distinguish this from a failed request.
-- For network or server failures, retain current selections and show the host's existing recoverable error treatment; exact copy, retry controls, and accessibility behavior are not specified.
-- Treat missing/invalid catalog metadata as a data-quality condition, not as a match by default. The catalog owner must confirm remediation/visibility policy before implementation.
-- Do not alter `/todos` success/error behavior. Its existing `401`, `404`, and validation behavior is unrelated to book browsing.
+- Invalid genre or filter values: return `400` with a stable, non-sensitive JSON error. Keep accepted values aligned with the shared filter-options file.
+- Valid selection with no matching sample records: return `200 []`; render a no-results state distinct from a network/server failure.
+- Catalog read/parse failure: return `500` with a generic error; log server-side details using existing conventions if needed.
+- Fetch failure in the browser: retain selected controls and show a recoverable error state; do not clear filters or imply that zero results were found.
+- Missing book metadata: do not infer a match or substitute a value. Filter behavior is blocked on the explicit missing-data decision below.
+- Do not alter existing To-Do authentication, response shapes, routes, or data files.
+
+## Unresolved semantics and proposed defaults (approval required)
+
+The requirements do not decide these behaviors. The suggested defaults are design proposals only; they are **not** user-agreed and must not be implemented as approved behavior until confirmed.
+
+| Ambiguity | Requirements state | Proposed default for approval | Must be decided before |
+|---|---|---|---|
+| Publication date windows | “Last 30 days,” “last 6 months,” and “last year” do not specify calendar vs. duration arithmetic, timezone, reference instant, or cutoff inclusivity. | Use UTC and a request-time rolling reference; define windows as 30, 180, and 365 days respectively, including the lower bound. Confirm whether this is acceptable or choose calendar-month/year semantics instead. | Implementing date predicates and boundary tests. |
+| Rating representation and thresholds | Scale, precision, aggregation, inclusivity, and unrated-review behavior are unspecified. | Use a numeric 5-star average and inclusive `averageRating >= threshold` checks for 4-plus/3-plus; do not treat unrated books as meeting a threshold. Confirm the scale/source and comparison semantics. | Implementing rating predicates or rating boundary tests. |
+| Missing filter metadata | Handling of missing/invalid format, language, date, or rating is unspecified. | Keep records visible when no filter is selected; when a category filter is active, exclude records lacking valid metadata for that category rather than guessing a value. Confirm per-field behavior and whether data-quality warnings are needed. | Finalizing matching policy and missing-data tests. |
+| Multiple selections within one category | The requirements define AND across selected filters but do not say whether values within a category are multi-select or how they combine. | Permit at most one value per category (single-select controls); keep AND across categories. If multi-select is desired, product must define within-category OR/AND behavior before the API accepts arrays. | Choosing control type, query cardinality, and combination tests. |
+
+The requirements also give no measurable performance, accessibility, responsive-layout, persistence, or empty-state-copy targets. Use existing page conventions and semantic HTML, but treat any additional product-level criteria as requiring approval rather than inventing acceptance thresholds.
 
 ## Risks
 
-| Risk | Impact | Mitigation / decision needed |
+| Risk | Impact | Mitigation |
 |---|---|---|
-| Story target and repository are different products; there is no bookstore UI, Fiction implementation, book source, or catalog route in this repository. | Any implementation here would fabricate product/catalog infrastructure or damage the To-Do application rather than satisfy the intended shopper flow. | Block implementation pending the bookstore repository/host and catalog/API owner. Confirm whether this Story is intentionally reassigned to this To-Do repository. |
-| Relative-date semantics are underspecified. | Boundary results can differ between clients, timezones, and month/year arithmetic. | Product/catalog owner to define timezone, “today,” cutoff inclusivity, and calendar-vs-duration calculation; centralize policy and add boundary tests. |
-| Fiction parity cannot be verified from this repository. | A hard-coded option list can drift from the actual Fiction filter set. | Reuse the host's shared option configuration/component if available; otherwise establish parity tests against the host's authoritative Fiction options. |
-| Catalog metadata shape, rating scale, missing-value policy, and data source are unknown. | Filters may return incorrect or incomplete results, or cannot be implemented against current data. | Inspect the real catalog and define normalization, validation, and no-rating behavior before coding. |
-| API ownership and shopper authentication policy are unknown. | A new route may conflict with an existing API or expose data under the wrong access policy. | Confirm the host's route conventions, authorization, error envelope, and query/pagination conventions. |
+| The sample catalog is small and not authoritative. | A filter combination may legitimately return no sample rows; demo results cannot represent real inventory or prove real-world completeness. | Label/document it as sample data; test query semantics with controlled fixtures and avoid claiming catalog coverage. |
+| No Fiction browse or canonical filter implementation exists in the detected application. | Parity cannot be checked against a pre-existing storefront. | Make the shared option file the source for both Fiction and Non-Fiction scopes in the proposed books surface; test that both scopes render the same required categories and options. |
+| Date, rating, missing-data, and same-category selection semantics are open. | Different reasonable implementations would return different results and tests would not be deterministic. | Obtain approval for the proposed defaults or alternatives in the table before implementing those predicates. |
+| Catalog size may outgrow a simple JSON-backed sample. | Full-file reads and unpaginated responses would not scale to production inventory. | Keep this bounded to a small local sample; revisit storage, limits, and pagination before expanding beyond that purpose. |
+| Existing app has authentication and To-Do-specific client/API behavior. | Reusing those paths could accidentally expose book browsing to To-Do-specific coupling or change existing behavior. | Isolate route, page, client state, data, and tests; preserve `/`, `/todos`, `public/script.js`, and existing user/todo files. |
 
 ## Alternatives
 
-1. **Add filter logic to `public/script.js` and book routes to `todoServer.js`** — rejected. Both files implement To-Do concepts, and no book catalog exists to support the behavior.
-2. **Create a second bookstore application/catalog inside this repository** — rejected for this Story. It invents a product surface, data model, and persistence contract not required or supported by the approved requirements.
-3. **Filter books only in the browser** — not selected as the default. The catalog size/loading model is unknown; filtering should normally happen where the authoritative catalog is queried. Revisit only if the actual host proves the full result set is already loaded and its conventions call for client-side filtering.
-4. **Add a new dependency or UI framework** — rejected. No requirement forces one, and the repository already uses native browser JavaScript and Express.
+1. **Attach book filters to `index.html` and `public/script.js`** — rejected because those files implement the To-Do UI and authentication lifecycle; user authorized a separate book surface.
+2. **Reuse `/todos` or `todos.json` as a book catalog** — rejected because todo records do not represent book metadata and the route/data are unrelated.
+3. **Serve the catalog JSON directly from `public/` and filter only in the browser** — rejected because it bypasses a book-specific query boundary and exposes data layout as the API. Only the non-sensitive shared option definitions belong in `public/`.
+4. **Add a database/framework or external catalog dependency** — rejected because the user requested a small local sample catalog and existing stack suffices.
+
+## Architecture decisions
+
+| ID | Decision | Status |
+|---|---|---|
+| AD-1 | Build a standalone `/books` surface; preserve the To-Do root page and behavior. | User-authorized direction; design recommendation. |
+| AD-2 | Use a small local, read-only JSON catalog outside the static directory, with a book-specific query module and `/api/books` boundary. | User-authorized local-sample direction; design recommendation. |
+| AD-3 | Use one shared filter-options definition for Fiction and Non-Fiction, and combine selected categories with AND. | Design recommendation grounded in FR-004/FR-006. |
+| AD-4 | Add no framework, dependency, database, or changes to To-Do data/API. | Design recommendation based on current stack and scope. |
+| AD-5 | Date boundaries, rating policy, missing metadata, and same-category multi-select remain unapproved; tabled defaults require product approval. | Open decisions; no default is represented as agreed. |
 
 ## Requirements traceability
 
 | Requirement | Architecture decision |
 |---|---|
-| FR-001 / AC-001 | Display the four required categories on the Non-Fiction listing. A matching Fiction implementation is not present here. |
-| FR-002 / AC-002–AC-005 | Use exactly the required visible labels/options in the Filter Model; keep any API tokens separate from those labels. |
-| FR-003 / AC-006 | A single selected filter returns matching Non-Fiction items. Define date/rating boundaries only after the open semantics are resolved. |
-| FR-004 / AC-007 | Results for multiple selected filters satisfy all selected filters. Do not infer how multiple values within one category combine. |
-| FR-005 / AC-008 | Clearing a selected filter restores the broader result set in accordance with remaining selections; the host/API should omit or otherwise clear that filter without changing unrelated selections. |
-| FR-006 / AC-009 | Match the Fiction filter categories and options. This cannot be verified or implemented until the bookstore host and its Fiction filter set are identified. |
+| FR-001 / AC-001 | `/books` renders the four required filter categories for the Non-Fiction scope using shared filter definitions. |
+| FR-002 / AC-002–AC-005 | The shared option definitions use exactly the required visible labels and values listed in the Filter Model. |
+| FR-003 / AC-006 | `/api/books` applies one selected category predicate to the selected genre; date/rating behavior awaits approval of boundary semantics. |
+| FR-004 / AC-007 | The book query boundary applies all selected categories conjunctively; same-category multi-selection remains an explicit open decision. |
+| FR-005 / AC-008 | The page omits the cleared parameter and retains other selections; omitting all optional filters restores all records in the chosen genre. |
+| FR-006 / AC-009 | Fiction and Non-Fiction use the same shared categories/options on the proposed book surface; parity tests compare their rendered controls. |
