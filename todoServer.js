@@ -3,6 +3,7 @@ const fs = require("fs");
 const cors = require("cors");
 const path = require("path");
 const crypto = require('crypto');
+const bookCatalog = require('./bookCatalog');
 
 const app = express();
 const PORT = 3000;
@@ -246,6 +247,38 @@ app.delete('/todos/:id', requireAuth, (req, res) => {
 
 app.get("/", (req, res) => {
   res.sendFile(path.join(__dirname, "index.html"));
+});
+
+app.get('/books', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'books.html'));
+});
+
+app.get('/api/books', (req, res) => {
+  const allowedKeys = new Set(['genre', 'format', 'language', 'publishedWithin', 'minRating']);
+  const query = req.query;
+  if (Object.keys(query).some(key => !allowedKeys.has(key))) {
+    return res.status(400).json({ error: 'Invalid book query.' });
+  }
+
+  const { genre } = query;
+  if (typeof genre !== 'string' || !bookCatalog.GENRES.has(genre)) {
+    return res.status(400).json({ error: 'Invalid book query.' });
+  }
+
+  const filters = {};
+  for (const key of ['format', 'language', 'publishedWithin', 'minRating']) {
+    if (query[key] === undefined) continue;
+    if (typeof query[key] !== 'string' || !bookCatalog.isValidFilterValue(key, query[key])) {
+      return res.status(400).json({ error: 'Invalid book query.' });
+    }
+    filters[key] = query[key];
+  }
+
+  try {
+    return res.status(200).json(bookCatalog.queryBooks({ genre, ...filters }));
+  } catch (error) {
+    return res.status(500).json({ error: 'Unable to retrieve books.' });
+  }
 });
 
 if (require.main === module) {

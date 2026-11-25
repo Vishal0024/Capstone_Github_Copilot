@@ -1,0 +1,82 @@
+[
+  {
+    "id": "sample-fiction-1",
+    "title": "The Quiet Observatory",
+    "author": "Mira Sol",
+    "genre": "fiction",
+    "format": "hardcover",
+    "language": "en",
+    "publicationDate": "2026-11-10",
+    "averageRating": 4.6
+  },
+  {
+    "id": "sample-fiction-2",
+    "title": "Cartas desde el mar",
+    "author": "Lucía Reyes",
+    "genre": "fiction",
+    "format": "paperback",
+    "language": "es",
+    "publicationDate": "2026-05-01",
+    "averageRating": 3.8
+  },
+  {
+    "id": "sample-fiction-3",
+    "title": "Les jardins oubliés",
+    "author": "Émile Laurent",
+    "genre": "fiction",
+    "format": "ebook",
+    "language": "fr",
+    "publicationDate": "2025-11-25",
+    "averageRating": 2.9
+  },
+  {
+    "id": "sample-fiction-4",
+    "title": "Winter Letters",
+    "author": "Hanna Weiss",
+    "genre": "fiction",
+    "format": "audiobook",
+    "language": "de",
+    "publicationDate": "2026-10-28",
+    "averageRating": 4
+  },
+  {
+    "id": "sample-nonfiction-1",
+    "title": "A Field Guide to Small Gardens",
+    "author": "Avery Green",
+    "genre": "non-fiction",
+    "format": "paperback",
+    "language": "en",
+    "publicationDate": "2026-11-02",
+    "averageRating": 4.8
+  },
+  {
+    "id": "sample-nonfiction-2",
+    "title": "Cocina para todos",
+    "author": "María Ortega",
+    "genre": "non-fiction",
+    "format": "ebook",
+    "language": "es",
+    "publicationDate": "2026-08-15",
+    "averageRating": 3
+  },
+  {
+    "id": "sample-nonfiction-3",
+    "title": "Comprendre les étoiles",
+    "author": "Noémie Bernard",
+    "genre": "non-fiction",
+    "format": "audiobook",
+    "language": "fr",
+    "publicationDate": "2025-12-01",
+    "averageRating": 4
+  },
+  {
+    "id": "sample-nonfiction-4",
+    "title": "Handwerk im Alltag",
+    "author": "Jonas Keller",
+    "genre": "non-fiction",
+    "format": "hardcover",
+    "language": "de",
+    "publicationDate": "2024-06-20",
+    "averageRating": 2.5
+  }
+]

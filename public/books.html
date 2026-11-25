@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Book Catalog</title>
+  <link rel="stylesheet" href="/books.css">
+  <script src="/books.js" defer></script>
+</head>
+<body class="books-page">
+  <header class="books-header">
+    <div>
+      <p class="eyebrow">Local sample catalog</p>
+      <h1>Browse books</h1>
+    </div>
+    <a href="/">Return to To-Do</a>
+  </header>
+  <main>
+    <section aria-labelledby="genre-heading">
+      <h2 id="genre-heading">Choose a genre</h2>
+      <div class="genre-scopes" role="group" aria-label="Book genre">
+        <button type="button" class="genre-button" data-genre="fiction" aria-pressed="false">Fiction</button>
+        <button type="button" class="genre-button" data-genre="non-fiction" aria-pressed="true">Non-Fiction</button>
+      </div>
+    </section>
+
+    <section aria-labelledby="filters-heading">
+      <h2 id="filters-heading">Filters</h2>
+      <div id="book-filters" class="book-filters"></div>
+    </section>
+
+    <section aria-labelledby="results-heading">
+      <h2 id="results-heading">Books</h2>
+      <p id="books-status" role="status" aria-live="polite">Loading books…</p>
+      <div id="book-results" class="book-results"></div>
+    </section>
+  </main>
+</body>
+</html>

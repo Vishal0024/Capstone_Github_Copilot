@@ -10,6 +10,7 @@ A modern, full-featured To-Do application built with Node.js, Express, and a bea
 - Responsive, modern UI with floating labels and glassmorphism
 - Search, filter, and sort todos
 - All data stored in JSON files (no database required)
+- Public book catalog at `/books` with genre and metadata filters, including combined filters
 - Clean code, easy to extend and contribute
 
 ## 🛠️ Tech Stack
@@ -48,12 +49,20 @@ A modern, full-featured To-Do application built with Node.js, Express, and a bea
    ```
 5. Open your browser and go to [http://localhost:3000](http://localhost:3000)
 
+No Docker setup is required; run the install and start commands above from the repository root.
+
 ## ✨ Usage
 - **Sign Up:** Register with your name, email, and password.
 - **Login:** Use your email and password to log in.
 - **Manage To-Dos:** Add, edit, delete, and mark to-dos as complete/incomplete.
 - **Search/Filter/Sort:** Use the controls to find and organize your tasks.
 - **Session:** The app shows who is logged in in the header.
+
+### Public Book Catalog
+
+- Open [http://localhost:3000/books](http://localhost:3000/books) to browse the public catalog; no sign-in is required.
+- Choose the genre scope and filter by book metadata such as format, language, publication date, and customer reviews.
+- Combine filters to narrow results to books matching all selected criteria. Clear a filter to broaden the results.
 
 ## 🤝 Contributing
 We welcome contributions! To get started:

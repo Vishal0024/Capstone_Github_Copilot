@@ -8,8 +8,8 @@
     "test": "node --test",
     "test:unit": "node --test tests/*.test.js",
     "test:integration": "node --test tests/*.integration.test.js",
-    "lint": "node --check todoServer.js && node --check public/script.js && node --check .github/hooks/git-safety-guard.cjs",
-    "coverage": "c8 --exclude=.github/hooks/** --include=todoServer.js --reporter=text --reporter=lcov --check-coverage --lines 85 node --test tests/*.test.js",
+    "lint": "node --check todoServer.js && node --check bookCatalog.js && node --check public/script.js && node --check public/books.js && node --check .github/hooks/git-safety-guard.cjs",
+    "coverage": "c8 --exclude=.github/hooks/** --include=todoServer.js --include=bookCatalog.js --reporter=text --reporter=lcov --check-coverage --lines 85 node --test tests/*.test.js",
     "docs:check": "node scripts/docs-check.js",
     "sdlc:verify": "npm run lint && npm test && npm run coverage"
   },

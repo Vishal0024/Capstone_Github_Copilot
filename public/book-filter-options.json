@@ -1,0 +1,41 @@
+{
+  "categories": [
+    {
+      "key": "format",
+      "label": "Book Format",
+      "options": [
+        { "value": "hardcover", "label": "hardcover" },
+        { "value": "paperback", "label": "paperback" },
+        { "value": "ebook", "label": "eBook" },
+        { "value": "audiobook", "label": "audiobook" }
+      ]
+    },
+    {
+      "key": "language",
+      "label": "Language",
+      "options": [
+        { "value": "en", "label": "English" },
+        { "value": "es", "label": "Spanish" },
+        { "value": "fr", "label": "French" },
+        { "value": "de", "label": "German" }
+      ]
+    },
+    {
+      "key": "publishedWithin",
+      "label": "Publication Date",
+      "options": [
+        { "value": "last-30-days", "label": "last 30 days" },
+        { "value": "last-6-months", "label": "last 6 months" },
+        { "value": "last-year", "label": "last year" }
+      ]
+    },
+    {
+      "key": "minRating",
+      "label": "Customer Reviews",
+      "options": [
+        { "value": "4-plus", "label": "4-stars and above" },
+        { "value": "3-plus", "label": "3-stars and above" }
+      ]
+    }
+  ]
+}

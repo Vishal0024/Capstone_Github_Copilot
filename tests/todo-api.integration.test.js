@@ -89,6 +89,42 @@ test('todo CRUD and filter endpoints cover success and missing cases', async t =
     .send({ title: 'Test todo', description: 'Details', completed: false })
     .expect(201);
 
+  const todos = JSON.parse(fs.readFileSync(todosFile, 'utf8'));
+  todos.push(
+    {
+      id: 100,
+      userId: 1,
+      title: 'Alpha completed task',
+      description: 'needle match',
+      completed: true,
+      createdAt: '2020-01-01T00:00:00.000Z',
+      updatedAt: '2020-01-02T00:00:00.000Z'
+    },
+    {
+      id: 101,
+      userId: 999,
+      title: 'Alpha private task',
+      description: 'needle match',
+      completed: true,
+      createdAt: '2030-01-01T00:00:00.000Z',
+      updatedAt: '2030-01-02T00:00:00.000Z'
+    }
+  );
+  fs.writeFileSync(todosFile, JSON.stringify(todos, null, 2));
+  const scopedTodos = await request(app).get('/todos').set(headers).expect(200);
+  assert.ok(Array.isArray(scopedTodos.body));
+  assert.ok(scopedTodos.body.every(todo => todo.userId === 1));
+  assert.equal(scopedTodos.body.some(todo => todo.id === 101), false);
+  const searchedTodos = await request(app).get('/todos?search=needle&filter=completed')
+    .set(headers).expect(200);
+  assert.deepEqual(searchedTodos.body.map(todo => todo.id), [100]);
+  const titleSorted = await request(app).get('/todos?sort=title').set(headers).expect(200);
+  assert.deepEqual(titleSorted.body.map(todo => todo.title), [...titleSorted.body.map(todo => todo.title)].sort());
+  const createdSorted = await request(app).get('/todos?sort=createdAt').set(headers).expect(200);
+  assert.ok(new Date(createdSorted.body[0].createdAt) >= new Date(createdSorted.body.at(-1).createdAt));
+  const updatedSorted = await request(app).get('/todos?sort=updatedAt').set(headers).expect(200);
+  assert.ok(new Date(updatedSorted.body[0].updatedAt) >= new Date(updatedSorted.body.at(-1).updatedAt));
+
   await request(app).get(`/todos/${created.body.id}`).set(headers).expect(200);
   await request(app).get('/todos').query({ search: 'test' }).set(headers).expect(200);
   await request(app).get('/todos').query({ filter: 'active' }).set(headers).expect(200);
