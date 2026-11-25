@@ -341,3 +341,67 @@ test('book page client smoke flow keeps shared options, selections, empty state,
   assert.equal(genreButtons[0].attributes['aria-pressed'], 'true');
   assert.equal(controls.get('format').children[1].textContent, 'hardcover');
 });
+
+test('book filter responses update results only for the latest selection', async t => {
+  const { initializeBooksPage } = require('../public/books');
+  const previousDocument = global.document;
+  const previousFetch = global.fetch;
+  const filters = new FakeElement('div');
+  const results = new FakeElement('div');
+  const status = new FakeElement('p');
+  const genreButtons = ['fiction', 'non-fiction'].map(genre => {
+    const button = new FakeElement('button');
+    button.dataset.genre = genre;
+    return button;
+  });
+  const elements = {
+    'book-filters': filters,
+    'book-results': results,
+    'books-status': status
+  };
+  const pendingResponses = [];
+  let apiRequestCount = 0;
+  global.document = {
+    createElement: tagName => new FakeElement(tagName),
+    getElementById: id => elements[id],
+    querySelectorAll: selector => selector === '.genre-button' ? genreButtons : []
+  };
+  global.fetch = async url => {
+    if (url === '/book-filter-options.json') {
+      return { ok: true, json: async () => filterDefinition };
+    }
+    if (apiRequestCount++ === 0) {
+      return { ok: true, json: async () => [book({ title: 'Initial result' })] };
+    }
+    return new Promise(resolve => pendingResponses.push(resolve));
+  };
+  t.after(() => {
+    if (previousDocument === undefined) delete global.document;
+    else global.document = previousDocument;
+    if (previousFetch === undefined) delete global.fetch;
+    else global.fetch = previousFetch;
+  });
+
+  await initializeBooksPage();
+  const controls = new Map(filters.children.map(label => [label.children[0].name, label.children[0]]));
+  controls.get('format').value = 'ebook';
+  const earlierRequest = controls.get('format').trigger('change');
+  controls.get('language').value = 'fr';
+  const latestRequest = controls.get('language').trigger('change');
+
+  assert.equal(pendingResponses.length, 2);
+  pendingResponses[1]({
+    ok: true,
+    json: async () => [book({ title: 'Latest selection result' })]
+  });
+  await latestRequest;
+  assert.equal(results.children[0].children[0].textContent, 'Latest selection result');
+
+  pendingResponses[0]({
+    ok: true,
+    json: async () => [book({ title: 'Stale selection result' })]
+  });
+  await earlierRequest;
+  assert.equal(results.children[0].children[0].textContent, 'Latest selection result');
+  assert.equal(status.textContent, '1 book found.');
+});

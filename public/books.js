@@ -38,6 +38,7 @@ async function initializeBooksPage() {
   const status = document.getElementById('books-status');
   const genreButtons = Array.from(document.querySelectorAll('.genre-button'));
   let genre = 'non-fiction';
+  let latestRequest = 0;
   const controls = new Map();
 
   function updateGenreButtons() {
@@ -47,6 +48,7 @@ async function initializeBooksPage() {
   }
 
   async function loadBooks() {
+    const requestId = ++latestRequest;
     showStatus(status, 'Loading books…');
     const params = new URLSearchParams({ genre });
     for (const [key, control] of controls) {
@@ -57,10 +59,12 @@ async function initializeBooksPage() {
       const response = await fetch(`/api/books?${params.toString()}`);
       if (!response.ok) throw new Error('Book request failed.');
       const books = await response.json();
+      if (requestId !== latestRequest) return;
       renderBooks(resultsContainer, books);
       if (books.length === 0) showStatus(status, 'No books match these filters.');
       else showStatus(status, `${books.length} book${books.length === 1 ? '' : 's'} found.`);
     } catch (error) {
+      if (requestId !== latestRequest) return;
       showStatus(status, 'Books could not be loaded. Please try again.', 'error');
     }
   }

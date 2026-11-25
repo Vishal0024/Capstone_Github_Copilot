@@ -1,18 +1,20 @@
 # Implementation Notes — EPMCDMETST-62758
 
-## Baseline (before changes)
+## Fresh baseline before F-001 fix
 
-| Check | Baseline result |
-|---|---|
-| `npm run lint` | Passed |
-| `npm test` | 8 passed, 0 failed |
-| `npm run test:unit` | 8 passed, 0 failed |
-| `npm run test:integration` | 2 passed, 0 failed |
-| `npm run coverage` | 8 passed; 88.71% lines, 73.07% branches, 100% functions; 85% line threshold passed |
-| Build | No build script configured |
-| `npm start` | No pre-change baseline result was recorded |
+Baseline was recorded on `feature/EPMCDMETST-62758` at `dd65191239bec46b12c132d667b5273578312a84`, before editing the browser client or tests. Checks were run serially. The existing catalog tests use `os.tmpdir()`; for test runs, `TEMP`, `TMP`, and `TMPDIR` were directed to a temporary directory under the repository and that directory was removed afterward.
 
-No baseline test failures were reported. Parallel unit/integration runs were known to be flaky because the existing To-Do tests share JSON fixtures (401/409); verification was therefore run serially.
+| Exact command | Exact result excerpt | Exit |
+|---|---|---:|
+| `npm run lint` | `> node --check todoServer.js && node --check bookCatalog.js && node --check public/script.js && node --check public/books.js && node --check .github/hooks/git-safety-guard.cjs` | 0 |
+| `npm run test:unit` | `# tests 23`; `# pass 23`; `# fail 0` | 0 |
+| `npm run test:integration` | `# tests 8`; `# pass 8`; `# fail 0` | 0 |
+| `npm test` | `# tests 23`; `# pass 23`; `# fail 0` | 0 |
+| `npm run coverage` | `# tests 23`; `# pass 23`; `# fail 0`; `All files       |   93.03 |       83 |     100 |   93.03`; 85% line threshold passed | 0 |
+| `npm run sdlc:verify` | Lint passed; `# tests 23`; `# pass 23`; `# fail 0`; `All files       |   93.03 |       83 |     100 |   93.03`; 85% line threshold passed | 0 |
+| `npm run docs:check -- EPMCDMETST-62758` | `Missing required artifact: docs/sdlc/EPMCDMETST-62758/verification.md` | 1 |
+
+No baseline test failures were reported. The documentation-check failure is pre-existing and expected at Step 5 because `verification.md` is a later-stage artifact. No build script is configured.
 
 ## Tasks completed
 
@@ -44,24 +46,27 @@ No baseline test failures were reported. Parallel unit/integration runs were kno
 
 ## New test results
 
-- `tests/book-catalog.test.js`: 9 story-specific tests passed (including deterministic client-flow and literal safe-text rendering).
+- `tests/book-catalog.test.js`: 10 story-specific tests passed (including deterministic client-flow, literal safe-text rendering, and the F-001 reverse-resolution race regression).
 - `tests/books-api.integration.test.js`: 6 story-specific tests passed.
-- Total new story-specific tests: **15 passed, 0 failed**.
+- Total story-specific tests: **16 passed, 0 failed**.
+- New tests for this fix: **1 passed, 0 failed**. It starts two filter requests, resolves the later selection first, then confirms the older response cannot replace its rendered result or status.
 - Existing To-Do integration tests remain 2 tests, with additional regression assertions.
 
-## Full-suite results vs. baseline
+## F-001 fix and regression results
 
-| Check | Baseline | After implementation | Regressions |
-|---|---:|---:|---:|
-| `npm run lint` | Passed | Passed | 0 |
-| `npm run test:unit` | 8 passed, 0 failed | 23 passed, 0 failed | 0 new failures |
-| `npm run test:integration` | 2 passed, 0 failed | 8 passed, 0 failed | 0 new failures |
-| `npm test` / `npm run sdlc:verify` test run | 8 passed, 0 failed | 23 passed, 0 failed | 0 new failures |
-| Coverage lines | 88.71% | 93.03% | +4.32 percentage points |
-| Coverage branches | 73.07% | 83.00% | +9.93 percentage points |
-| Coverage functions | 100% | 100% | No regression |
+`public/books.js` now increments a request sequence for each selection and applies the response or error state only if its sequence is still current. Older requests may finish but cannot update rendered results or status. This preserves current filter behavior and uses no new dependency or To-Do path. The focused reverse-resolution test is in `tests/book-catalog.test.js`.
 
-The configured 85% line-coverage threshold passed. `npm run sdlc:verify` passed (lint, full tests, coverage).
+| Exact command | Fresh baseline | After F-001 fix | Regression comparison |
+|---|---:|---:|---|
+| `npm run lint` | Passed (exit 0) | Passed (exit 0) | No lint regressions |
+| `npm run test:unit` | 23 passed, 0 failed | 24 passed, 0 failed | +1 focused test; 0 new failures |
+| `npm run test:integration` | 8 passed, 0 failed | 8 passed, 0 failed | No test-count or failure change |
+| `npm test` | 23 passed, 0 failed | 24 passed, 0 failed | +1 focused test; 0 new failures |
+| `npm run coverage` | 23 passed; 93.03% lines, 83% branches, 100% functions | 24 passed; 93.03% lines, 83% branches, 100% functions | Coverage unchanged; 85% line threshold passed |
+| `npm run sdlc:verify` | Lint/tests/coverage passed; 23 tests; 93.03% lines | Lint/tests/coverage passed; 24 tests; 93.03% lines | +1 focused test; 0 new failures |
+| `npm run docs:check -- EPMCDMETST-62758` | Exit 1: missing `verification.md` | Exit 1: missing `verification.md` | Same pre-existing Step 5 artifact limitation |
+
+The configured 85% line-coverage threshold passed. Exact focused test command: `node --test --test-name-pattern="book filter responses update results only for the latest selection" tests/book-catalog.test.js`; output was `# tests 1`, `# pass 1`, `# fail 0`, exit 0. The checks reported no errors other than the documented, unchanged documentation-check limitation.
 
 ## Build and start
 
@@ -73,7 +78,6 @@ The configured 85% line-coverage threshold passed. `npm run sdlc:verify` passed 
 - T-009 could not be completed in a real browser because Edge, Chrome, Chromium, Firefox, Playwright, and Puppeteer were unavailable. The UI flow was instead exercised through a deterministic fake-DOM/fetch test, and the configured app was smoke-tested over HTTP. No dependencies were added.
 - The first start-check harness attempt failed with `Cannot find type [System.Net.Http.HttpClient]: verify that the assembly containing this type is loaded.` The harness was corrected and rerun successfully; the application itself had no start/runtime error.
 - `npm run docs:check -- EPMCDMETST-62758` returned exit code 1 because it requires later-stage artifacts that this Step 5 does not create:
-  - `Missing required artifact: docs/sdlc/EPMCDMETST-62758/code-review.md`
   - `Missing required artifact: docs/sdlc/EPMCDMETST-62758/verification.md`
-  These artifacts were intentionally not created because code review and final verification are outside this requested implementation step.
+  This artifact was intentionally not created because final verification is outside this requested implementation step.
 - No implementation-scope deviations or new test failures.
