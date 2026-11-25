@@ -1,67 +1,70 @@
-# Code Review — EPMCDMETST-62758
+# Code Review Rerun — EPMCDMETST-62758
 
-## Review scope and evidence
+## Scope and evidence
 
-- **Comparison:** `feature/EPMCDMETST-62758` against `main`; `git diff --stat main...HEAD` reported 16 files changed, 1,505 insertions, and 2 deletions. The exact changed-file list is recorded below.
-- **Review evidence:** Read every changed file in full, including requirements, architecture, approved design review, implementation plan, and implementation notes. Reviewed callers and existing filtering/sorting in `todoServer.js` and `public/script.js`. `App.jsx` is Not Found in the repository.
-- **Jira traceability:** `requirements.md` records its Jira source snapshot and the nine acceptance criteria. A live Jira fetch was Not Found because no Jira MCP was available; no additional Jira fields or criteria are inferred.
-- **Change scope:** `bookCatalog.js`, `data/books.json`, the Story's architecture/design-review/impl-plan/implementation-notes/requirements documents, `package.json`, `public/book-filter-options.json`, `public/books.css`, `public/books.html`, `public/books.js`, `tests/book-catalog.test.js`, `tests/books-api.integration.test.js`, `tests/todo-api.integration.test.js`, and `todoServer.js`.
-- The existing To-Do filtering/sorting remains in its existing client/server paths. No duplicate book filtering path was found.
+- **Branch/base:** `feature/EPMCDMETST-62758` compared with `main`.
+- **Latest remediation:** `a0bc99685f94003051c0ce2336ad9e657f29c385` (`fix(EPMCDMETST-62758): ignore stale book filter responses`).
+- **Diff:** 17 files, 1,644 insertions, 2 deletions. The existing To-Do filtering/sorting in `todoServer.js` and `public/script.js` was read for context; book filtering is centralized in `bookCatalog.js`. `App.jsx` is Not Found in this repository.
+- **Story traceability:** `requirements.md` records the Jira source snapshot and maps FR-001–FR-006 to AC-001–AC-009. The implementation and this review trace to that snapshot and the approved semantics/decisions in `architecture.md` (AD-5–AD-8). A live Jira fetch was Not Found in the available tools; no additional Jira fields or acceptance criteria are inferred.
+- **Reviewed artifacts:** requirements, architecture, approved design review, implementation plan, implementation notes, prior review, changed application and test files, and the complete current branch scope. The remediation adds a monotonically increasing request sequence and a reverse-order response regression test.
 
 ## Seven-area review
 
-| Area | Question | Result | Notes |
+| Area | Review question | Result | Notes |
 |---|---|---|---|
-| Correctness and requirements | Does each component satisfy the documented requirements and approved architecture? | ⚠️ | The required categories/options, genre scope, filter conjunction, and clearing behavior are implemented. F-001 identifies a request-order race that can show results for a prior selection. Requirements open questions are interpreted only according to the approved architecture. |
-| Security | Are inputs validated and untrusted catalog values safely handled without exposing sensitive data? | ✅ | The public API validates supported query keys, cardinality, and tokens; catalog-controlled UI values use `textContent`/text nodes. The sample catalog is outside `public/`; catalog failures return generic errors. |
-| Error handling and edge cases | Are failures, missing data, empty results, and boundary cases handled? | ⚠️ | Empty and request-error states are distinct; catalog and filter inputs fail closed. Out-of-order asynchronous responses can replace current results (F-001). |
-| Test coverage | Do tests cover the requirements, edge cases, and regressions? | ⚠️ | Unit/API tests cover filtering, validation, safe rendering, empty results, and To-Do regressions. Implementation notes report 0 new failures versus baseline, but results were not independently rerun. T-009's real-browser smoke check is documented as unavailable; the test harness is not a real browser. |
-| Code clarity, maintainability, and separation | Is functionality understandable and appropriately separated? | ✅ | Book query logic, API, page, client, options, and sample data are isolated from the To-Do UI and persistence. |
-| DRY, duplication, and complexity | Is behavior centralized without unnecessary duplication? | ✅ | Shared options drive controls and validation; filtering is centralized in `bookCatalog.js`. Existing To-Do filters/sorts are separate and unchanged. |
-| Dependency safety, compatibility, and configuration | Are dependencies safe and compatible, and are configuration changes appropriate? | ⚠️ | No dependency declarations or lockfile changes were made. `npm audit` reports two moderate findings in the existing Nodemon → minimatch dependency chain; details are below. |
+| Correctness and requirements | Does each component satisfy the documented requirements and approved architecture? | ✅ | Required labels/options, genre scope, AND filtering, clearing, and parity are implemented. The F-001 request-order race is resolved: `public/books.js` ignores stale success/error completions; the added regression test resolves requests in reverse order. |
+| Security | Are inputs validated and untrusted catalog values safely handled without exposing sensitive data? | ✅ | The API rejects unknown, invalid, repeated, and multi-value parameters; catalog-controlled fields render through text nodes/`textContent`; sample data is outside `public/`; catalog errors are generic. |
+| Error handling and edge cases | Are failures, missing data, empty results, and boundary cases handled? | ✅ | Empty results differ from fetch failures; selections are retained on errors; invalid catalog structure fails closed; date/rating/metadata edge cases are covered. Stale errors cannot replace the current status. |
+| Test coverage | Do tests cover the requirements, edge cases, and regressions? | ✅ | `npm test` and coverage passed in this rerun. Unit/API coverage includes filter boundaries, validation, safe rendering, To-Do regressions, and the F-001 reverse-resolution case. A real-browser smoke check remains unavailable as noted below. |
+| Code clarity, maintainability, and separation | Is functionality understandable and appropriately separated? | ✅ | The book page, client, API, query boundary, options, and sample data remain separated from To-Do UI state and persistence. The sequence guard is small and localized. |
+| DRY, duplication, and complexity | Is behavior centralized without unnecessary duplication? | ✅ | Shared options drive validation and controls; book filtering is centralized. No duplicate book-filtering path or changes to existing To-Do search/filter/sort logic were found. |
+| Dependency safety, compatibility, and configuration | Are dependencies safe and compatible, and are configuration changes appropriate? | ⚠️ | No dependency or lockfile changes were introduced. `npm audit` still reports two moderate findings in the existing Nodemon/minimatch chain; details below. |
 
 ## Findings
 
 | ID | Area | Severity | File:line | Issue | Recommendation |
 |---|---|---|---|---|---|
-| F-001 | Correctness and requirements | MAJOR | `public/books.js:49-64` | Each selection starts an independent request. If responses finish out of order, an older selection can overwrite results for the latest controls, showing a result set that does not match the shopper's current filters (FR-003/FR-004). | Sequence requests and render only the latest response, or abort the prior request with `AbortController`. Add a test that resolves two filter requests in reverse order and verifies only the latest result is rendered. |
+| — | — | — | — | No unresolved BLOCKER, MAJOR, or MINOR findings. Prior finding F-001 is resolved. | — |
 
-## Plan compliance
+### F-001 resolution
 
-| Check / task | Result | Evidence / notes |
+The former finding concerned stale filter responses overwriting newer results/status (FR-003/FR-004). `public/books.js` increments `latestRequest` for each load and checks that request ID before applying either success or error state. `tests/book-catalog.test.js` now resolves two requests in reverse order and asserts the latest result/status remain visible. The test passed in the full `npm test` run.
+
+## Plan compliance and scope
+
+| Check | Result | Evidence / notes |
 |---|---|---|
-| T-001 | ✅ | Canonical shared option definitions and exact labels/tokens are present. |
-| T-002 | ✅ | Eight-record illustrative catalog is under `data/`, outside the static directory. |
-| T-003 | ✅ | Query boundary validates required catalog structure, applies genre and filters, and implements approved date/rating/metadata policies. |
-| T-004 | ✅ | Public `/api/books` validates query values and returns generic catalog failures; separate from To-Do authentication. |
-| T-005 | ✅ | Separate `/books` page and scoped styles; Non-Fiction is the default. |
-| T-006 | ⚠️ | Separate client, filter clearing, error/empty states, and safe text rendering are present; F-001 remains. |
-| T-007 | ✅ | Unit/query and safe-rendering tests are present; the 85% coverage threshold is retained. |
-| T-008 | ✅ | API and To-Do regression assertions cover root route, auth, user scoping, filtering, and sorting. |
-| T-009 | ⚠️ | Implementation notes say real-browser testing was unavailable; deterministic DOM/fetch and HTTP smoke tests were substituted. |
-| T-010 | ✅ | Implementation notes report final regression/scope checks and no new dependencies. |
-| Out-of-scope changes | ✅ | The 16-file diff matches the Story and its SDLC artifacts; no unrelated application/data changes were found. |
-| Commit format | ⚠️ | Feature commits predominantly use `type(EPMCDMETST-62758): ...` and Copilot co-author trailers. One early requirements commit uses a plain subject; another plan commit omits the Story scope. The required review commit will use the specified format and trailer. |
-| Protected paths | ✅ | No changed path matches `.env`, `.env.*`, `node_modules/`, `todos.json`, `users.json`, or `sessions.json`. Unrelated worktree changes `.mcp.json` and deleted `.vscode/mcp.json` were not touched. |
-| Known broken tests KI-1..KI-3 | ✅ | `docs/KNOWN-ISSUES.md` records no verified baseline failures and has no KI-1..KI-3 entries; it is not changed. No corresponding known-issue test paths are documented. |
-| New failures versus baseline | ✅ | `implementation-notes.md` explicitly reports 0 new failures for lint, unit, integration, and full test runs, with coverage increasing from 88.71% to 93.03%. This is documented evidence, not an independent rerun. |
+| T-001 through T-005 | ✅ | Shared options, sample catalog, query boundary, public API, and separate page are implemented as planned. |
+| T-006 | ✅ | Isolated browser client uses safe text rendering, preserves filter selections, and now suppresses stale responses. |
+| T-007 | ✅ | Unit/query and safe-rendering tests are present; the 85% line threshold remains configured and passed. |
+| T-008 | ✅ | API and To-Do regressions cover public books, query validation, root page, auth, user scoping, filtering, and sorting. |
+| T-009 | ⚠️ | Real-browser smoke test unavailable. Implementation notes record deterministic DOM/fetch and HTTP smoke substitutes; these do not equal browser automation. |
+| T-010 | ✅ | Scope and regression checks were reported in implementation notes; independent lint, test, and coverage checks passed in this rerun. |
+| Out-of-scope/protected paths | ✅ | No `.env*`, `node_modules/`, `todos.json`, `users.json`, or `sessions.json` changes occur in `main...HEAD`. The unrelated worktree changes to `.mcp.json` and deletion of `.vscode/mcp.json` were preserved and are not part of this review diff. |
+| Known baseline issues KI-1..KI-3 | ✅ | No KI-1..KI-3 entries or verified baseline failures are recorded; `docs/KNOWN-ISSUES.md` states none have been verified. No known-issue test path was changed. |
+| Baseline failures | ✅ | `implementation-notes.md` reports zero new failures versus its recorded baseline. This rerun independently found no test failures; historical baseline failures are not charged to this Story. |
+| Commit format | ⚠️ | The latest fix commit uses `fix(EPMCDMETST-62758): ...` and a Copilot co-author trailer. Historical branch commits include older subjects that do not consistently use the Story-scoped format; no new implementation commit is requested by this review. |
 
 ## Dependency-safety summary
 
-- Node manifest and lockfile: `package.json` and `package-lock.json`; the branch changes only lint/coverage scripts in `package.json`, not dependency declarations or the lockfile.
-- `npm audit` was run and exited 1. It reported **2 moderate severity vulnerabilities**: `minimatch` versions 7.0.0–11.0.0, GHSA-g3hv-75wg-m249 (potential denial of service via globparts amplification), through existing `nodemon`; npm reports a fix is available via `npm audit fix`.
-- These dependencies are unchanged by this Story; no new dependencies are reported.
-- Build script: Not Found in `package.json`.
+- Manifest/lockfile: `package.json` and `package-lock.json`; implementation changes scripts only, with no new dependency declarations or lockfile changes.
+- `npm audit` exited **1** and reported **2 moderate** findings: `minimatch` 7.0.0–11.0.0, GHSA-g3hv-75wg-m249 (potential denial of service via globparts amplification), pulled through existing `nodemon`. npm reports `npm audit fix` is available.
+- The vulnerable packages are unchanged by this Story; no dependency finding is attributed to the remediation.
 
-## Verification notes and limitations
+## Verification and limits
 
-- `git diff --stat main...HEAD` and `git log --oneline main..HEAD` were run. The branch diff contains 16 implementation/SDLC files, with no protected paths.
-- `git diff --check main...HEAD` exited 2 and reported the added lines in `todoServer.js` as trailing whitespace. Raw inspection confirms the file uses CRLF line endings in both the working tree and `HEAD` (`291` CRLF line endings); the check treats those carriage returns as whitespace. No file was modified to address this check.
-- Tests, lint, and coverage were not rerun as part of this review. Their reported results above are attributed to `implementation-notes.md`.
-- The Jira MCP and real-browser tooling were unavailable; those checks are not represented as passing.
+| Command/check | Result |
+|---|---|
+| `npm run lint` | Passed (exit 0). |
+| `npm test` | Passed (exit 0): 24 tests, 24 passed, 0 failed. |
+| `npm run coverage` | Passed (exit 0): 24 tests; 93.03% line coverage; configured 85% line threshold passed. |
+| `npm run test:unit` / `npm run test:integration` | Not run separately in this rerun; the full `npm test` suite passed. |
+| `npm audit` | Exit 1; two moderate existing dependency findings, detailed above. |
+| `npm run docs:check -- EPMCDMETST-62758` | Exit 1: `Missing required artifact: docs/sdlc/EPMCDMETST-62758/verification.md`. This later-stage artifact is outside Step 6. |
+| `git diff --check main...HEAD` | Exit 2; reports the added lines in `todoServer.js` as trailing whitespace. Byte-level inspection found CRLF line endings on both `main` and `HEAD` versions and no spaces/tabs before the line endings; this is an end-of-line/configuration artifact, not added trailing spaces. No application file was changed to address it. |
+| Real-browser smoke | Not available per implementation notes; deterministic DOM/fetch and HTTP substitutes are documented but are not claimed as browser verification. |
+| `App.jsx` / live Jira lookup | Not Found in repository / available tools. Jira traceability uses the recorded source snapshot in `requirements.md`. |
 
 ## Verdict
 
-**REQUEST CHANGES**
-
-F-001 is a MAJOR user-visible correctness issue: results may not correspond to the current filter selection. No BLOCKER findings were identified.
+**APPROVE** — F-001 is resolved, no new review findings remain, and the full test suite, lint, and coverage checks pass. The documented browser, audit, docs-check, and diff-check limitations do not reveal a new Story-specific correctness or security defect.
