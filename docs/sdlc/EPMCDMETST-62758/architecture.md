@@ -1,14 +1,14 @@
 # Architecture Design
 
 - **Story ID**: EPMCDMETST-62758
-- **Approved requirements**: `docs/sdlc/EPMCDMETST-62758/requirements.md`
+- **Requirements basis**: `docs/sdlc/EPMCDMETST-62758/requirements.md` is committed on this feature branch. It has no explicit approval marker; its Jira evidence reports the Story as Open, so independent human approval cannot be verified from the available artifact.
 - **Repository stack**: Node.js / Express 4, static HTML/CSS, browser-native JavaScript, and JSON-file persistence. Tests use Node's built-in test runner and Supertest.
 
 ## Architecture recommendation
 
 The requested feature belongs to a Non-Fiction book listing and its book catalog. The detected application is a To-Do application: `index.html`, `public/script.js`, `todoServer.js`, and the existing integration tests contain no book listings, Fiction implementation, book metadata, or catalog API. Therefore there is no honest in-repository component to extend, and the feature cannot be integrated end-to-end here without first identifying/providing the bookstore host and its authoritative catalog source.
 
-Design the feature as a host-owned listing capability: render the four filter groups in the existing Fiction/Non-Fiction book-browsing experience, keep normalized selections in the listing controller, and query the host's catalog API. Apply filtering against authoritative catalog metadata (preferably in the catalog/query layer), preserving OR within each category and AND between categories. Do not modify the To-Do UI, its `/todos` contract, or its JSON data files to simulate a bookstore. No dependencies are required.
+Design the feature as a host-owned listing capability: render the four filter groups in the existing Fiction/Non-Fiction book-browsing experience, keep selected filters in the listing controller, and query the host's catalog API. Apply filtering against authoritative catalog metadata (preferably in the catalog/query layer), requiring results to satisfy all selected filters across categories. Same-category multi-selection behavior is unspecified and must not be inferred. Do not modify the To-Do UI, its `/todos` contract, or its JSON data files to simulate a bookstore. No dependencies are required.
 
 The components and `/api/books` contract below are a proposed integration boundary, not existing repository capabilities. They become implementation locations only after the actual bookstore host, catalog schema/source, and API ownership are confirmed. If the Story is explicitly reassigned to this repository, implement it as a separate book-browsing surface and route rather than coupling it to To-Do screens or changing `/todos`.
 
@@ -56,9 +56,9 @@ The components and `/api/books` contract below are a proposed integration bounda
 ## Data flow
 
 1. The host opens the Non-Fiction listing and renders exactly the same four groups and option sets as its Fiction book listing (FR-001/FR-002, AC-001–AC-005, AC-009).
-2. The controller starts with no selected options. A shopper selects or clears an option; the controller keeps a set of selected values per category and retains the Non-Fiction scope.
-3. The controller sends the complete current selection to the proposed catalog listing API. Repeated values in one category encode multiple choices.
-4. The catalog query validates values, applies an OR predicate for each populated category, and ANDs the populated category predicates together. Date and rating comparisons use the rules below.
+2. The controller captures the shopper's current selections and retains the Non-Fiction scope. Whether multiple values can be selected in one category is not specified.
+3. The controller sends the current selection to the proposed catalog listing API. The exact request encoding for multiple values in one category must follow a product/catalog decision; the repeatable query parameters below are only a candidate contract.
+4. The catalog query validates values and applies the selected filters so the result satisfies all selected filters across categories. Same-category combination behavior and date/rating boundaries must be confirmed before implementation.
 5. The API returns the matching books. The host renders them; an empty array produces the host's no-results state. The exact empty-state wording/layout is not specified.
 6. Clearing an option updates only that category's selection and repeats the query. Clearing all options returns the broader Non-Fiction result set.
 
@@ -66,7 +66,7 @@ The components and `/api/books` contract below are a proposed integration bounda
 
 ### Filter model
 
-Keep stable API tokens separate from visible labels. The following tokens are proposed; the required visible labels and option sets are authoritative.
+Keep stable API tokens separate from visible labels. The following tokens are proposed; the required visible labels and option sets are authoritative. Token mapping must be aligned with the real catalog model.
 
 | Category | Visible options | Proposed API tokens |
 |---|---|---|
@@ -75,13 +75,12 @@ Keep stable API tokens separate from visible labels. The following tokens are pr
 | Publication Date | last 30 days, last 6 months, last year | `last-30-days`, `last-6-months`, `last-year` |
 | Customer Reviews | 4-stars and above, 3-stars and above | `4-plus`, `3-plus` |
 
-Options are exact: do not expose additional values unless the matching Fiction filter set changes through separate scope/approval. Multiple selected format, language, date-period, or review-threshold tokens match when any selected token in that category matches (OR); all populated categories must match (AND). Ratings equal to the selected minimum are included. When both rating options are selected, the OR of the inclusive thresholds applies (equivalent to a minimum of 3); do not reinterpret selection as the stricter threshold.
+Options are exact: do not expose additional values unless the matching Fiction filter set changes through separate scope/approval. When multiple categories are selected, results must satisfy all selected filters. The requirements do not state whether a shopper can select multiple values within one category or how such values combine; do not assume OR or AND. “Last 30 days,” “last 6 months,” and “last year” do not define cutoffs, timezone, or calendar-versus-duration semantics. “4-stars and above” and “3-stars and above” do not specify inclusivity, rating scale, precision, or unrated-item behavior. Confirm these policies with the product/catalog owner and test the agreed behavior before implementation.
 
 ### Date and rating evaluation
 
-- Date periods are evaluated relative to “today,” not a fixed date baked into the client or catalog. The catalog/query layer should calculate cutoffs at request time so all clients share one interpretation.
-- Requirement evidence does not settle timezone, day boundary, cutoff inclusivity, or whether “last 6 months” and “last year” mean calendar subtraction or elapsed durations. These must be resolved by product/catalog owners before implementation. Do not silently present a particular timezone or calendar rule as approved. Once settled, encode the selected policy centrally and test its boundaries, including date changes and leap/calendar boundaries as applicable.
-- Review filters use `rating >= 4` and `rating >= 3` respectively, inclusive, against the catalog's authoritative rating scale. The scale, precision, and handling of unrated books are not specified; confirm the scale and define unrated records as non-matches unless product owners specify otherwise.
+- The date labels imply recency choices but do not define their evaluation. Confirm the reference date, timezone, day boundary, cutoff inclusivity, and calendar-versus-duration calculation with product/catalog owners before implementation. Encode the agreed policy centrally and test its boundaries.
+- Confirm the rating scale, threshold inclusivity, precision, and handling of unrated books with product/catalog owners before implementation. Do not encode assumed `>=` comparisons as approved behavior.
 
 ### Proposed API contract (not implemented in this repository)
 
@@ -90,18 +89,18 @@ Options are exact: do not expose additional values unless the matching Fiction f
 | Parameter | Cardinality / values | Meaning |
 |---|---|---|
 | `genre` | Required; `non-fiction` for this listing | Restricts the listing to Non-Fiction. The host must map this token to its authoritative genre/category model. |
-| `format` | Repeatable; `hardcover`, `paperback`, `ebook`, `audiobook` | OR across supplied format values. |
-| `language` | Repeatable; `en`, `es`, `fr`, `de` | OR across supplied language values. |
-| `publishedWithin` | Repeatable; `last-30-days`, `last-6-months`, `last-year` | OR across supplied periods; each cutoff is relative to the request-time “today” under the approved date policy. |
-| `minRating` | Repeatable; `4-plus`, `3-plus` | OR across supplied inclusive thresholds. |
+| `format` | Candidate optional parameter; `hardcover`, `paperback`, `ebook`, `audiobook` | Filter by the selected format. Multiple values/cardinality and their combination semantics require product/catalog confirmation. |
+| `language` | Candidate optional parameter; `en`, `es`, `fr`, `de` | Filter by the selected language. Multiple values/cardinality and their combination semantics require product/catalog confirmation. |
+| `publishedWithin` | Candidate optional parameter; `last-30-days`, `last-6-months`, `last-year` | Filter by the selected publication-period label. Cutoff and multiple-value semantics require confirmation. |
+| `minRating` | Candidate optional parameter; `4-plus`, `3-plus` | Filter by the selected review label. Threshold inclusivity and multiple-value semantics require confirmation. |
 
 Example request:
 
 ```http
-GET /api/books?genre=non-fiction&format=paperback&format=ebook&language=en&publishedWithin=last-30-days&minRating=4-plus
+GET /api/books?genre=non-fiction&format=paperback&language=en&publishedWithin=last-30-days&minRating=4-plus
 ```
 
-The example selects paperback OR eBook, English, within the last 30 days, and rating at least 4; those populated categories are ANDed.
+The example illustrates one value per category; all selected categories must be satisfied. Exact publication-date and review-threshold matching still depends on product/catalog decisions.
 
 Proposed success response: `200 application/json`, a JSON array of records in the host's established book DTO shape. Minimum fields needed to render/filter are a stable book identifier and the authoritative format, language, publication date, and numeric customer rating (plus any fields the existing host requires to render a card). Do not create a new persisted schema before inspecting the real catalog.
 
@@ -136,9 +135,9 @@ No separate clear endpoint is needed: omit a query parameter to clear that categ
 
 | Requirement | Architecture decision |
 |---|---|
-| FR-001 / AC-001, AC-009 | Put the four groups on the host's Non-Fiction book listing and derive/reuse the matching Fiction set. The host and Fiction implementation are not present here, so parity is an implementation prerequisite. |
-| FR-002 / AC-002–AC-005 | Use the exact labels and option sets in the Filter Model; represent choices with stable tokens separate from labels. |
-| FR-003 / AC-006–AC-007 | Repeatable query values express OR within a category; catalog predicates for populated categories are combined with AND. |
-| FR-004 / AC-004, AC-006 | Evaluate date cutoffs at request time relative to today in the catalog/query layer; block implementation until timezone, boundary, and calendar/duration semantics are agreed. |
-| FR-005 / AC-005–AC-006 | Evaluate inclusive thresholds (`rating >= 4` and `rating >= 3`) against authoritative numeric rating metadata; confirm rating scale and unrated-item policy. |
-| FR-006 / AC-008 | Clearing omits that category from the next request while retaining other selections; no active filters returns the broader Non-Fiction listing; valid empty results return `200 []`. |
+| FR-001 / AC-001 | Display the four required categories on the Non-Fiction listing. A matching Fiction implementation is not present here. |
+| FR-002 / AC-002–AC-005 | Use exactly the required visible labels/options in the Filter Model; keep any API tokens separate from those labels. |
+| FR-003 / AC-006 | A single selected filter returns matching Non-Fiction items. Define date/rating boundaries only after the open semantics are resolved. |
+| FR-004 / AC-007 | Results for multiple selected filters satisfy all selected filters. Do not infer how multiple values within one category combine. |
+| FR-005 / AC-008 | Clearing a selected filter restores the broader result set in accordance with remaining selections; the host/API should omit or otherwise clear that filter without changing unrelated selections. |
+| FR-006 / AC-009 | Match the Fiction filter categories and options. This cannot be verified or implemented until the bookstore host and its Fiction filter set are identified. |
